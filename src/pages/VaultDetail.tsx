@@ -250,24 +250,49 @@ function TransparencySection() {
   );
 }
 
-// --- NAV Chart ---
+// --- NAV Chart with integrated APY ---
 function NAVChart() {
+  const [period, setPeriod] = useState<"7d" | "30d" | "90d">("30d");
+  const chartData = NAV_DATA_MAP[period];
+  const currentAPY = APY_MAP[period];
+  const latestNAV = chartData[chartData.length - 1]?.nav;
+
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
       className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-display font-semibold text-foreground">NAV Performance (30d)</h3>
-        <div className="flex gap-2">
-          {["7d", "30d", "90d"].map((period) => (
-            <button key={period} className={`text-xs font-mono px-2 py-0.5 rounded ${period === "30d" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-              {period}
-            </button>
-          ))}
+      {/* Header row: Title + APY + Period Toggle */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
+        <div>
+          <h3 className="font-display font-semibold text-foreground">NAV Performance</h3>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* APY Badge */}
+          <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5">
+            <TrendingUp className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs text-muted-foreground font-mono">APY</span>
+            <span className="text-sm font-mono font-bold text-primary">{currentAPY}%</span>
+          </div>
+          {/* Period toggle */}
+          <div className="flex bg-secondary rounded-lg p-0.5">
+            {(["7d", "30d", "90d"] as const).map((p) => (
+              <button key={p} onClick={() => setPeriod(p)}
+                className={`text-xs font-mono px-2.5 py-1 rounded-md transition-all ${p === period ? "bg-primary/20 text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-      <div className="h-48">
+
+      {/* Current NAV callout */}
+      <div className="flex items-baseline gap-2 mb-4">
+        <span className="text-2xl font-mono font-bold text-foreground">${latestNAV?.toFixed(4)}</span>
+        <span className="text-xs font-mono text-yield-positive">+{VAULT_DATA.navDelta24h}% (24h)</span>
+      </div>
+
+      <div className="h-52">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={NAV_HISTORY}>
+          <AreaChart data={chartData}>
             <defs>
               <linearGradient id="navGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="hsl(187, 100%, 50%)" stopOpacity={0.3} />
@@ -275,7 +300,7 @@ function NAVChart() {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 16%)" />
-            <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }} axisLine={false} tickLine={false} interval={6} />
+            <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }} axisLine={false} tickLine={false} interval={period === "90d" ? 14 : period === "30d" ? 6 : 1} />
             <YAxis domain={["dataMin - 0.005", "dataMax + 0.005"]} tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v.toFixed(3)} />
             <RechartsTooltip
               contentStyle={{ background: "hsl(220, 18%, 10%)", border: "1px solid hsl(220, 15%, 16%)", borderRadius: 8, fontSize: 12 }}
