@@ -474,30 +474,22 @@ export default function VaultDetailPage() {
             </div>
           </motion.div>
 
-          {/* Share Price + Key Stats */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-            className="rounded-xl border border-border bg-card p-5">
-            <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-8">
-              <div>
-                <div className="text-xs text-muted-foreground font-mono mb-1">Share Price (NAV)</div>
-                <div className="flex items-baseline gap-3">
-                  <span className="text-3xl font-mono font-bold text-foreground">${VAULT_DATA.sharePrice.toFixed(4)}</span>
-                  <span className="text-sm font-mono text-yield-positive">+{VAULT_DATA.navDelta24h}% (24h)</span>
-                  <span className="text-xs font-mono text-muted-foreground">+{VAULT_DATA.navDelta7d}% (7d)</span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* APY Stats Row */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="APY (7d)" value={`${VAULT_DATA.apy7d}%`} variant="primary" subValue="+0.15%" trend="up" />
-            <StatCard label="APY (30d)" value={`${VAULT_DATA.apy30d}%`} />
-            <StatCard label="APY (90d)" value={`${VAULT_DATA.apy90d}%`} />
+          {/* TVL Stat */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-2 gap-3">
             <StatCard label="TVL" value={formatUSD(VAULT_DATA.tvl)} />
+            <StatCard label="Capacity" value={formatUSD(VAULT_DATA.capacity)} subValue={`${((VAULT_DATA.tvl / VAULT_DATA.capacity) * 100).toFixed(0)}% filled`} />
           </motion.div>
 
-          {/* Strategy (Layered) */}
+          {/* 1. NAV Chart (hero visual — includes APY toggle) */}
+          <NAVChart />
+
+          {/* 2. Transparency — Asset Allocation (visual) */}
+          <TransparencySection />
+
+          {/* 3. Redemption Capacity (visual) */}
+          <RedemptionCapacity />
+
+          {/* 4. Strategy (text, expandable) */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="rounded-xl border border-border bg-card p-5 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-display font-semibold text-foreground">Strategy</h3>
@@ -520,19 +512,10 @@ export default function VaultDetailPage() {
             </AnimatePresence>
           </motion.div>
 
-          {/* Factsheet */}
+          {/* 5. Factsheet (structured details) */}
           <FactsheetSection />
 
-          {/* NAV Chart */}
-          <NAVChart />
-
-          {/* Redemption Capacity */}
-          <RedemptionCapacity />
-
-          {/* Transparency */}
-          <TransparencySection />
-
-          {/* Recent Curator Actions (type + timestamp only) */}
+          {/* 6. On-chain Activity Log */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="rounded-xl border border-border bg-card p-5">
             <h3 className="font-display font-semibold text-foreground mb-4">On-chain Activity Log</h3>
             <div className="space-y-3">
