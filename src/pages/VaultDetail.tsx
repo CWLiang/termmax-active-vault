@@ -42,11 +42,30 @@ const VAULT_DATA = {
   strategyContract: "0xabcdef1234567890abcdef1234567890abcdef12",
 };
 
-// Mock NAV history for chart
-const NAV_HISTORY = Array.from({ length: 30 }, (_, i) => ({
-  day: `Feb ${i + 1}`,
-  nav: 1.02 + Math.random() * 0.02 + i * 0.0005,
+// Mock NAV history for chart — different lengths per timeframe
+const NAV_HISTORY_7D = Array.from({ length: 7 }, (_, i) => ({
+  day: `Feb ${i + 22}`,
+  nav: +(1.028 + Math.random() * 0.008 + i * 0.0008).toFixed(4),
 }));
+const NAV_HISTORY_30D = Array.from({ length: 30 }, (_, i) => ({
+  day: `Feb ${i + 1}`,
+  nav: +(1.02 + Math.random() * 0.015 + i * 0.0005).toFixed(4),
+}));
+const NAV_HISTORY_90D = Array.from({ length: 90 }, (_, i) => ({
+  day: `Dec ${(i % 31) + 1}`,
+  nav: +(1.005 + Math.random() * 0.02 + i * 0.0003).toFixed(4),
+}));
+
+const NAV_DATA_MAP: Record<string, typeof NAV_HISTORY_7D> = {
+  "7d": NAV_HISTORY_7D,
+  "30d": NAV_HISTORY_30D,
+  "90d": NAV_HISTORY_90D,
+};
+const APY_MAP: Record<string, number> = {
+  "7d": VAULT_DATA.apy7d,
+  "30d": VAULT_DATA.apy30d,
+  "90d": VAULT_DATA.apy90d,
+};
 
 const ALLOCATION_DATA = [
   { name: "OUSG (RWA)", value: 62, amount: 7750000, color: "hsl(187, 100%, 50%)" },
