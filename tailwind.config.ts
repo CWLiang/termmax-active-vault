@@ -57,6 +57,21 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        yield: {
+          positive: "hsl(var(--yield-positive))",
+          negative: "hsl(var(--yield-negative))",
+          neutral: "hsl(var(--yield-neutral))",
+        },
+        buffer: {
+          safe: "hsl(var(--buffer-safe))",
+          warning: "hsl(var(--buffer-warning))",
+          danger: "hsl(var(--buffer-danger))",
+        },
+      },
+      fontFamily: {
+        display: ['Space Grotesk', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'monospace'],
+        body: ['Inter', 'sans-serif'],
       },
       borderRadius: {
         lg: "var(--radius)",
