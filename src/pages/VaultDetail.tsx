@@ -42,11 +42,30 @@ const VAULT_DATA = {
   strategyContract: "0xabcdef1234567890abcdef1234567890abcdef12",
 };
 
-// Mock NAV history for chart
-const NAV_HISTORY = Array.from({ length: 30 }, (_, i) => ({
-  day: `Feb ${i + 1}`,
-  nav: 1.02 + Math.random() * 0.02 + i * 0.0005,
+// Mock NAV history for chart — different lengths per timeframe
+const NAV_HISTORY_7D = Array.from({ length: 7 }, (_, i) => ({
+  day: `Feb ${i + 22}`,
+  nav: +(1.028 + Math.random() * 0.008 + i * 0.0008).toFixed(4),
 }));
+const NAV_HISTORY_30D = Array.from({ length: 30 }, (_, i) => ({
+  day: `Feb ${i + 1}`,
+  nav: +(1.02 + Math.random() * 0.015 + i * 0.0005).toFixed(4),
+}));
+const NAV_HISTORY_90D = Array.from({ length: 90 }, (_, i) => ({
+  day: `Dec ${(i % 31) + 1}`,
+  nav: +(1.005 + Math.random() * 0.02 + i * 0.0003).toFixed(4),
+}));
+
+const NAV_DATA_MAP: Record<string, typeof NAV_HISTORY_7D> = {
+  "7d": NAV_HISTORY_7D,
+  "30d": NAV_HISTORY_30D,
+  "90d": NAV_HISTORY_90D,
+};
+const APY_MAP: Record<string, number> = {
+  "7d": VAULT_DATA.apy7d,
+  "30d": VAULT_DATA.apy30d,
+  "90d": VAULT_DATA.apy90d,
+};
 
 const ALLOCATION_DATA = [
   { name: "OUSG (RWA)", value: 62, amount: 7750000, color: "hsl(187, 100%, 50%)" },
@@ -231,24 +250,49 @@ function TransparencySection() {
   );
 }
 
-// --- NAV Chart ---
+// --- NAV Chart with integrated APY ---
 function NAVChart() {
+  const [period, setPeriod] = useState<"7d" | "30d" | "90d">("30d");
+  const chartData = NAV_DATA_MAP[period];
+  const currentAPY = APY_MAP[period];
+  const latestNAV = chartData[chartData.length - 1]?.nav;
+
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
       className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-display font-semibold text-foreground">NAV Performance (30d)</h3>
-        <div className="flex gap-2">
-          {["7d", "30d", "90d"].map((period) => (
-            <button key={period} className={`text-xs font-mono px-2 py-0.5 rounded ${period === "30d" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-              {period}
-            </button>
-          ))}
+      {/* Header row: Title + APY + Period Toggle */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
+        <div>
+          <h3 className="font-display font-semibold text-foreground">NAV Performance</h3>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* APY Badge */}
+          <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5">
+            <TrendingUp className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs text-muted-foreground font-mono">APY</span>
+            <span className="text-sm font-mono font-bold text-primary">{currentAPY}%</span>
+          </div>
+          {/* Period toggle */}
+          <div className="flex bg-secondary rounded-lg p-0.5">
+            {(["7d", "30d", "90d"] as const).map((p) => (
+              <button key={p} onClick={() => setPeriod(p)}
+                className={`text-xs font-mono px-2.5 py-1 rounded-md transition-all ${p === period ? "bg-primary/20 text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-      <div className="h-48">
+
+      {/* Current NAV callout */}
+      <div className="flex items-baseline gap-2 mb-4">
+        <span className="text-2xl font-mono font-bold text-foreground">${latestNAV?.toFixed(4)}</span>
+        <span className="text-xs font-mono text-yield-positive">+{VAULT_DATA.navDelta24h}% (24h)</span>
+      </div>
+
+      <div className="h-52">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={NAV_HISTORY}>
+          <AreaChart data={chartData}>
             <defs>
               <linearGradient id="navGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="hsl(187, 100%, 50%)" stopOpacity={0.3} />
@@ -256,7 +300,7 @@ function NAVChart() {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 16%)" />
-            <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }} axisLine={false} tickLine={false} interval={6} />
+            <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }} axisLine={false} tickLine={false} interval={period === "90d" ? 14 : period === "30d" ? 6 : 1} />
             <YAxis domain={["dataMin - 0.005", "dataMax + 0.005"]} tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v.toFixed(3)} />
             <RechartsTooltip
               contentStyle={{ background: "hsl(220, 18%, 10%)", border: "1px solid hsl(220, 15%, 16%)", borderRadius: 8, fontSize: 12 }}
@@ -430,30 +474,22 @@ export default function VaultDetailPage() {
             </div>
           </motion.div>
 
-          {/* Share Price + Key Stats */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-            className="rounded-xl border border-border bg-card p-5">
-            <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-8">
-              <div>
-                <div className="text-xs text-muted-foreground font-mono mb-1">Share Price (NAV)</div>
-                <div className="flex items-baseline gap-3">
-                  <span className="text-3xl font-mono font-bold text-foreground">${VAULT_DATA.sharePrice.toFixed(4)}</span>
-                  <span className="text-sm font-mono text-yield-positive">+{VAULT_DATA.navDelta24h}% (24h)</span>
-                  <span className="text-xs font-mono text-muted-foreground">+{VAULT_DATA.navDelta7d}% (7d)</span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* APY Stats Row */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="APY (7d)" value={`${VAULT_DATA.apy7d}%`} variant="primary" subValue="+0.15%" trend="up" />
-            <StatCard label="APY (30d)" value={`${VAULT_DATA.apy30d}%`} />
-            <StatCard label="APY (90d)" value={`${VAULT_DATA.apy90d}%`} />
+          {/* TVL Stat */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-2 gap-3">
             <StatCard label="TVL" value={formatUSD(VAULT_DATA.tvl)} />
+            <StatCard label="Capacity" value={formatUSD(VAULT_DATA.capacity)} subValue={`${((VAULT_DATA.tvl / VAULT_DATA.capacity) * 100).toFixed(0)}% filled`} />
           </motion.div>
 
-          {/* Strategy (Layered) */}
+          {/* 1. NAV Chart (hero visual — includes APY toggle) */}
+          <NAVChart />
+
+          {/* 2. Transparency — Asset Allocation (visual) */}
+          <TransparencySection />
+
+          {/* 3. Redemption Capacity (visual) */}
+          <RedemptionCapacity />
+
+          {/* 4. Strategy (text, expandable) */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="rounded-xl border border-border bg-card p-5 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-display font-semibold text-foreground">Strategy</h3>
@@ -476,19 +512,10 @@ export default function VaultDetailPage() {
             </AnimatePresence>
           </motion.div>
 
-          {/* Factsheet */}
+          {/* 5. Factsheet (structured details) */}
           <FactsheetSection />
 
-          {/* NAV Chart */}
-          <NAVChart />
-
-          {/* Redemption Capacity */}
-          <RedemptionCapacity />
-
-          {/* Transparency */}
-          <TransparencySection />
-
-          {/* Recent Curator Actions (type + timestamp only) */}
+          {/* 6. On-chain Activity Log */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="rounded-xl border border-border bg-card p-5">
             <h3 className="font-display font-semibold text-foreground mb-4">On-chain Activity Log</h3>
             <div className="space-y-3">
