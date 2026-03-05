@@ -792,7 +792,7 @@ export default function VaultDetailPage() {
           <div>
             <h4 className="text-[11px] font-mono font-semibold text-muted-foreground/50 uppercase tracking-wider mb-1.5">Risk Disclaimer</h4>
             <p className="text-[11px] text-muted-foreground/40 leading-relaxed">
-              Investing in Midas-issued tokens involves risk, including potential loss of principal. Please review all relevant documentation before proceeding.
+              Investing in TermMax Active Vaults involves risk, including potential loss of principal due to smart contract vulnerabilities, market volatility, and liquidity constraints. Please review all relevant documentation before proceeding.
             </p>
           </div>
         </div>
