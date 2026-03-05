@@ -10,12 +10,12 @@ const MOCK_VAULTS = [
     id: "vault-1",
     name: "RWA Enhanced Yield",
     curator: "Keyrock Capital",
-    strategy: "RWA collateral + fixed-rate leverage on TermMax + satellite FT/PT positions",
+    strategy: "RWA collateral + fixed-rate leverage on TermMax + satellite FT/PT + Aave/Morpho lending",
     apy7d: 9.8,
     apy30d: 9.5,
-    tvl: 24_796_699,
+    tvl: 27_396_699,
     capacity: 50_000_000,
-    bufferRatio: 4.6,
+    bufferRatio: 10.9, // (cash + lending) / NAV ≈ 4.27M / 39M total ≈ 10.9% of total assets as liquid
     riskLevel: "Medium",
   },
   {
@@ -124,7 +124,7 @@ export default function VaultListPage() {
                   <Gauge
                     value={vault.bufferRatio}
                     max={100}
-                    label="Cash Buffer"
+                    label="Liquidity Buffer"
                     thresholds={{ warning: 70, danger: 90 }}
                     className="w-full"
                   />

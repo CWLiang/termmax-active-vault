@@ -3,12 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertTriangle, Activity,
-  Coins, ArrowDownToLine, ArrowUpFromLine, Zap, Pause, Timer,
+  Coins, ArrowDownToLine, ArrowUpFromLine, Zap, Pause, Timer, Waves,
 } from "lucide-react";
 import { VaultBalanceSheet } from "@/components/VaultBalanceSheet";
 
-/* ─── Example Data — ~$36.4M Total Assets, 64 days since inception ─── */
-const VAULT_CASH = 1_670_000;
+/* ─── Example Data — ~$39M Total Assets, 64 days since inception ─── */
+const VAULT_CASH = 670_000;
 
 const VAULT_RWA = [
   {
@@ -56,6 +56,31 @@ const VAULT_FRT = [
   },
 ];
 
+const VAULT_LENDING = [
+  {
+    protocol: "Aave",
+    asset: "USDC",
+    receiptToken: "aUSDC",
+    principal: 2_000_000,
+    currentValue: 2_000_000,
+    apy: 0.045,
+    rateType: "floating" as const,
+    depositDate: "2025-03-05",
+    withdrawable: true,
+  },
+  {
+    protocol: "Morpho",
+    asset: "USDC",
+    receiptToken: "mUSDC",
+    principal: 1_600_000,
+    currentValue: 1_600_000,
+    apy: 0.052,
+    rateType: "floating" as const,
+    depositDate: "2025-03-05",
+    withdrawable: true,
+  },
+];
+
 const VAULT_BORROWS = [
   {
     id: "GT-1",
@@ -89,7 +114,7 @@ const VAULT_SHARES = {
   totalSharesOutstanding: 24_500_000,
   lpInvestedCapital: 24_500_000,
   accumulatedEarnings: 751_568,
-  navPerShare: 1.0122,
+  navPerShare: 1.1182,
 };
 
 export default function CuratorDashboard() {
@@ -109,6 +134,7 @@ export default function CuratorDashboard() {
             cash={VAULT_CASH}
             rwaPositions={VAULT_RWA}
             frtPositions={VAULT_FRT}
+            lendingPositions={VAULT_LENDING}
             borrowPositions={VAULT_BORROWS}
             fees={VAULT_FEES}
             shares={VAULT_SHARES}
@@ -124,6 +150,7 @@ export default function CuratorDashboard() {
               <TabsList className="w-full bg-secondary mb-4 flex-wrap h-auto gap-0.5 p-1">
                 <TabsTrigger value="rwa" className="text-xs font-mono flex-1"><Coins className="h-3 w-3 mr-1" />RWA</TabsTrigger>
                 <TabsTrigger value="frt" className="text-xs font-mono flex-1"><Timer className="h-3 w-3 mr-1" />FRT</TabsTrigger>
+                <TabsTrigger value="lending" className="text-xs font-mono flex-1"><Waves className="h-3 w-3 mr-1" />Lend</TabsTrigger>
                 <TabsTrigger value="borrow" className="text-xs font-mono flex-1"><Activity className="h-3 w-3 mr-1" />Borrow</TabsTrigger>
                 <TabsTrigger value="emergency" className="text-xs font-mono flex-1"><AlertTriangle className="h-3 w-3 mr-1" />Emergency</TabsTrigger>
               </TabsList>
@@ -154,6 +181,24 @@ export default function CuratorDashboard() {
                   <div className="flex justify-between"><span className="text-muted-foreground">Maturity</span><span className="text-foreground font-mono">Jun 3, 2025</span></div>
                 </div>
                 <Button className="w-full"><ArrowDownToLine className="h-4 w-4" />Buy FRT</Button>
+              </TabsContent>
+
+              <TabsContent value="lending" className="space-y-4">
+                <h4 className="font-display font-semibold text-sm text-foreground">Deploy to Lending</h4>
+                <select className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm text-foreground font-mono">
+                  <option>Aave USDC (~4.5% APY)</option>
+                  <option>Morpho USDC (~5.2% APY)</option>
+                </select>
+                <input type="number" placeholder="USDC Amount" className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground" />
+                <div className="p-3 rounded-lg bg-secondary/50 border border-border space-y-1.5 text-xs">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Rate Type</span><span className="text-amber-400 font-mono">~Floating</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Withdrawable</span><span className="text-emerald-400 font-mono">✓ On demand</span></div>
+                </div>
+                <Button className="w-full"><ArrowDownToLine className="h-4 w-4" />Deploy</Button>
+                <div className="border-t border-border pt-4">
+                  <h4 className="font-display font-semibold text-sm text-foreground mb-3">Withdraw from Lending</h4>
+                  <Button variant="outline" className="w-full"><ArrowUpFromLine className="h-4 w-4" />Withdraw</Button>
+                </div>
               </TabsContent>
 
               <TabsContent value="borrow" className="space-y-4">
