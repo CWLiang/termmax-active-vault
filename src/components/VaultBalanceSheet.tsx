@@ -307,6 +307,7 @@ export function VaultBalanceSheet({
               icon={<Waves className="h-3.5 w-3.5 text-violet-400" />}
               title="Yield-Bearing Liquidity"
               subtotal={fmtFull(totalLending)}
+              summaryItems={lendingPositions.map(l => ({ name: `${l.protocol} ${l.receiptToken}`, value: fmtFull(l.currentValue) }))}
             >
               <div className="text-[10px] text-muted-foreground/60 font-mono mb-2">Withdrawable on demand · floating rate</div>
               {lendingPositions.map((l, i) => {
@@ -359,6 +360,7 @@ export function VaultBalanceSheet({
             icon={<Landmark className="h-3.5 w-3.5 text-accent" />}
             title="RWA Positions"
             subtotal={fmtFull(totalRWA)}
+            summaryItems={rwaPositions.map(r => ({ name: r.token, value: fmtFull(r.currentValue) }))}
           >
             {rwaPositions.map((r, i) => {
               const badge = assetTypeBadge(r.assetType);
@@ -408,6 +410,7 @@ export function VaultBalanceSheet({
             icon={<Timer className="h-3.5 w-3.5 text-amber-400" />}
             title="Fixed Rate Tokens"
             subtotal={fmtFull(totalFRT_AC)}
+            summaryItems={frtAmortized.map(f => ({ name: f.token, value: fmtFull(f.amortizedValue) }))}
           >
             {frtAmortized.map((f, i) => {
               const totalDays = daysBetween(f.purchaseDate, f.maturityDate);
@@ -499,6 +502,7 @@ export function VaultBalanceSheet({
             icon={<Shield className="h-3.5 w-3.5 text-destructive" />}
             title="Borrow Positions"
             subtotal={fmtFull(totalBorrows)}
+            summaryItems={borrowPositions.map(b => ({ name: `${b.id} (${b.collateralToken})`, value: fmtFull(b.borrowedUSDC) }))}
           >
             {borrowPositions.map((b) => (
               <div key={b.id} className="py-3 border-b border-border/20 last:border-0">
@@ -541,6 +545,10 @@ export function VaultBalanceSheet({
             icon={<Banknote className="h-3.5 w-3.5 text-accent" />}
             title="Accrued Fees"
             subtotal={fmtFull(totalAccruedFees)}
+            summaryItems={[
+              { name: "Management Fee", value: fmtFull(fees.accruedManagementFee) },
+              { name: "Performance Fee", value: fmtFull(fees.accruedPerformanceFee) },
+            ]}
           >
             <div className="flex items-center justify-between py-1 text-sm">
               <div>
@@ -576,6 +584,10 @@ export function VaultBalanceSheet({
             title="Equity"
             subtotal={fmtFull(nav_AC)}
             defaultOpen
+            summaryItems={[
+              { name: "NAV per Share", value: `$${navPerShare.toFixed(4)}` },
+              { name: "Since Inception", value: pctSigned(sinceInception) },
+            ]}
           >
             <div className="space-y-1.5">
               <div className="flex justify-between text-sm">
