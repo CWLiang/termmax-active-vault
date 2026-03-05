@@ -200,6 +200,43 @@ function BalanceSheet() {
             </div>
           </div>
 
+          {/* Loan Positions (Borrowings) */}
+          <div className="px-5 py-3 border-b border-border/50">
+            <div className="flex items-center gap-2 mb-2">
+              <Shield className="h-3.5 w-3.5 text-primary" />
+              <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Loan Positions</span>
+            </div>
+            {LOANS.map((loan) => (
+              <div key={loan.id} className="py-2 border-b border-border/20 last:border-0">
+                <div className="flex items-center justify-between text-sm mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-foreground">{loan.collateral}</span>
+                    <span className="text-xs text-muted-foreground">#{loan.id}</span>
+                    <span className="text-xs font-mono text-primary">{loan.rate}%</span>
+                  </div>
+                  <span className="font-mono text-foreground text-sm">{formatUSD(loan.principal)}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Gauge
+                    value={loan.ltv}
+                    max={loan.liqThreshold}
+                    label={`LTV ${loan.ltv}% / Liq ${loan.liqThreshold}%`}
+                    thresholds={{ warning: 75, danger: 90 }}
+                    className="flex-1"
+                    showPercentage={false}
+                  />
+                  <span className="text-xs font-mono text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />{loan.maturity}
+                  </span>
+                </div>
+              </div>
+            ))}
+            <div className="flex justify-between pt-1.5 border-t border-border/30 text-xs text-muted-foreground font-mono">
+              <span>Subtotal</span>
+              <span>{formatUSD(totalLoans)}</span>
+            </div>
+          </div>
+
           {/* Net Equity */}
           <div className="px-5 py-3">
             <div className="flex items-center gap-2 mb-2">
