@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import {
   DollarSign, TrendingUp, Shield, Clock,
   Landmark, Wallet, BarChart3, Users, Award, AlertTriangle,
-  Banknote, Lock,
+  Banknote, Lock, Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,18 @@ interface RWAPosition {
   costBasis: number;
   currentValue: number;
   yieldRate: number;
+}
+
+interface FRTPosition {
+  protocol: string;
+  token: string;
+  assetType: "fixed_rate_token";
+  faceValue: number;
+  purchasePrice: number;
+  currentPrice: number;
+  purchaseDate: string;
+  maturityDate: string;
+  impliedYield: number;
 }
 
 interface BorrowPosition {
@@ -45,10 +57,12 @@ interface ShareAccounting {
 interface VaultBalanceSheetProps {
   cash: number;
   rwaPositions: RWAPosition[];
+  frtPositions: FRTPosition[];
   borrowPositions: BorrowPosition[];
   fees: FeeStructure;
   shares: ShareAccounting;
   daysSinceInception?: number;
+  today?: string;
 }
 
 /* ─── Helpers ─── */
@@ -85,6 +99,10 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function daysBetween(a: string, b: string) {
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
+}
+
 function ltvColor(ltv: number) {
   if (ltv > 0.80) return "bg-destructive text-destructive-foreground";
   if (ltv > 0.70) return "bg-buffer-warning text-accent-foreground";
@@ -96,29 +114,51 @@ function assetTypeBadge(t: "equity_fund" | "private_credit") {
   return { label: "Private Credit", cls: "bg-teal-500/20 text-teal-400 border-teal-500/30" };
 }
 
+function protocolBadge(p: string) {
+  if (p === "TermMax") return "bg-primary/15 text-primary border-primary/30";
+  if (p === "Pendle") return "bg-purple-500/20 text-purple-400 border-purple-500/30";
+  return "bg-secondary text-muted-foreground border-border";
+}
+
+function computeAmortizedValue(frt: FRTPosition, today: string) {
+  const totalDays = daysBetween(frt.purchaseDate, frt.maturityDate);
+  const elapsed = Math.max(0, daysBetween(frt.purchaseDate, today));
+  if (totalDays <= 0) return frt.purchasePrice;
+  return frt.purchasePrice + (frt.faceValue - frt.purchasePrice) * (elapsed / totalDays);
+}
+
 /* ─── Component ─── */
 export function VaultBalanceSheet({
-  cash, rwaPositions, borrowPositions, fees, shares, daysSinceInception = 64,
+  cash, rwaPositions, frtPositions, borrowPositions, fees, shares, daysSinceInception = 64, today = "2025-03-05",
 }: VaultBalanceSheetProps) {
   const totalRWA = rwaPositions.reduce((s, r) => s + r.currentValue, 0);
-  const totalAssets = cash + totalRWA;
+  const frtAmortized = frtPositions.map(f => ({ ...f, amortizedValue: computeAmortizedValue(f, today) }));
+  const totalFRT_AC = frtAmortized.reduce((s, f) => s + f.amortizedValue, 0);
+  const totalFRT_MTM = frtPositions.reduce((s, f) => s + f.currentPrice, 0);
+  const totalAssets_AC = cash + totalRWA + totalFRT_AC;
+  const totalAssets_MTM = cash + totalRWA + totalFRT_MTM;
 
   const totalBorrows = borrowPositions.reduce((s, b) => s + b.borrowedUSDC, 0);
   const totalAccruedFees = fees.accruedManagementFee + fees.accruedPerformanceFee;
   const totalLiabilities = totalBorrows + totalAccruedFees;
 
-  const nav = totalAssets - totalLiabilities;
-  const navPerShare = shares.totalSharesOutstanding > 0 ? nav / shares.totalSharesOutstanding : 0;
-  const leverageRatio = nav > 0 ? totalAssets / nav : 0;
+  const nav_AC = totalAssets_AC - totalLiabilities;
+  const nav_MTM = totalAssets_MTM - totalLiabilities;
+  const navPerShare = shares.totalSharesOutstanding > 0 ? nav_AC / shares.totalSharesOutstanding : 0;
+  const leverageRatio = nav_AC > 0 ? totalAssets_AC / nav_AC : 0;
   const sinceInception = navPerShare > 0 ? (navPerShare - 1) : 0;
 
-  const dailyYield = rwaPositions.reduce((s, r) => s + (r.currentValue * r.yieldRate) / 365, 0);
+  const dailyYield_RWA = rwaPositions.reduce((s, r) => s + (r.currentValue * r.yieldRate) / 365, 0);
+  const dailyYield_FRT = frtAmortized.reduce((s, f) => {
+    const totalDays = daysBetween(f.purchaseDate, f.maturityDate);
+    return s + (totalDays > 0 ? (f.faceValue - f.purchasePrice) / totalDays : 0);
+  }, 0);
+  const dailyYield = dailyYield_RWA + dailyYield_FRT;
   const dailyCost = borrowPositions.reduce((s, b) => s + (b.borrowedUSDC * b.fixedRate) / 365, 0);
   const netSpread = dailyYield - dailyCost;
-  const dailyMgmtFee = (totalAssets * fees.managementFeeRate) / 365;
+  const dailyMgmtFee = (totalAssets_AC * fees.managementFeeRate) / 365;
 
-  const annualMgmtFee = totalAssets * fees.managementFeeRate;
-  const estNetAPY = nav > 0 ? ((netSpread * 365) - annualMgmtFee) / nav : 0;
+  const estNetAPY = nav_AC > 0 ? ((netSpread * 365) - (totalAssets_AC * fees.managementFeeRate)) / nav_AC : 0;
 
   const grossEarnings = shares.accumulatedEarnings;
 
@@ -131,12 +171,12 @@ export function VaultBalanceSheet({
         className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-xl border border-border bg-card px-6 py-4"
       >
         {[
-          { label: "Total Assets", value: fmt(totalAssets), accent: false },
-          { label: "NAV", value: fmt(nav), accent: true },
+          { label: "Total Assets", value: fmt(totalAssets_AC), accent: false },
+          { label: "NAV", value: fmt(nav_AC), accent: true },
           { label: "Leverage", value: `${leverageRatio.toFixed(2)}x`, accent: false },
           { label: "NAV/Share", value: `$${navPerShare.toFixed(4)}`, accent: false },
           { label: "Since Inception", value: pctSigned(sinceInception), accent: false, isPositive: sinceInception >= 0 },
-          { label: "Est. Net APY", value: pctShort(estNetAPY), accent: true },
+          { label: "Est. Net APY", value: `~${pctShort(estNetAPY)}`, accent: true },
         ].map((item) => (
           <div key={item.label} className="flex flex-col items-center gap-0.5">
             <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{item.label}</span>
@@ -175,7 +215,7 @@ export function VaultBalanceSheet({
           </div>
 
           {/* RWA Positions */}
-          <div className="px-5 py-4 border-b border-border/50 flex-1">
+          <div className="px-5 py-4 border-b border-border/50">
             <div className="flex items-center gap-2 mb-3">
               <Landmark className="h-3.5 w-3.5 text-accent" />
               <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">RWA Positions</span>
@@ -189,7 +229,7 @@ export function VaultBalanceSheet({
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                     <span className="font-mono text-foreground font-semibold text-sm">{r.token}</span>
                     <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full border font-mono", badge.cls)}>{badge.label}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary font-mono">{r.platform}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-muted-foreground/30 bg-secondary text-muted-foreground font-mono">{r.platform}</span>
                   </div>
                   <div className="text-xs text-muted-foreground font-mono mb-2">
                     Managed by <span className="text-foreground">{r.managedBy}</span>
@@ -215,7 +255,7 @@ export function VaultBalanceSheet({
                     </div>
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground font-mono">Est. Daily Yield</span>
-                      <span className="font-mono text-yield-positive">{fmtFull(dailyY)}</span>
+                      <span className="font-mono text-yield-positive">{fmtFull(dailyY)}/day</span>
                     </div>
                   </div>
                 </div>
@@ -227,11 +267,83 @@ export function VaultBalanceSheet({
             </div>
           </div>
 
+          {/* Fixed Rate Token Positions */}
+          <div className="px-5 py-4 border-b border-border/50 flex-1">
+            <div className="flex items-center gap-2 mb-3">
+              <Timer className="h-3.5 w-3.5 text-amber-400" />
+              <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Fixed Rate Tokens</span>
+            </div>
+            {frtAmortized.map((f, i) => {
+              const totalDays = daysBetween(f.purchaseDate, f.maturityDate);
+              const elapsed = Math.max(0, daysBetween(f.purchaseDate, today));
+              const progress = totalDays > 0 ? (elapsed / totalDays) * 100 : 0;
+              const dailyAccrual = totalDays > 0 ? (f.faceValue - f.purchasePrice) / totalDays : 0;
+              return (
+                <div key={i} className="py-3 border-b border-border/20 last:border-0">
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full border font-mono", protocolBadge(f.protocol))}>{f.protocol}</span>
+                    <span className="font-mono text-foreground font-semibold text-sm">{f.token}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/15 text-amber-400 font-mono">Fixed Rate</span>
+                  </div>
+                  <div className="space-y-1 mt-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground font-mono">Face Value</span>
+                      <span className="font-mono text-muted-foreground">{fmtFull(f.faceValue)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground font-mono">Purchase Price</span>
+                      <span className="font-mono text-muted-foreground">{fmtFull(f.purchasePrice)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground font-mono">Amortized Value</span>
+                      <span className="font-mono text-foreground font-semibold">{fmtFull(f.amortizedValue)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground font-mono">Market Value</span>
+                      <span className="font-mono text-muted-foreground/60">{fmtFull(f.currentPrice)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs mt-1">
+                      <span className="text-muted-foreground font-mono flex items-center gap-1">
+                        Implied Yield <Lock className="h-3 w-3 text-muted-foreground/50" /> <span className="text-[10px] text-muted-foreground/50">locked yield</span>
+                      </span>
+                      <span className="font-mono text-primary">{pctShort(f.impliedYield)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground font-mono">Daily Accrual</span>
+                      <span className="font-mono text-yield-positive">{fmtFull(dailyAccrual)}/day</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground font-mono">Maturity</span>
+                      <span className="font-mono text-muted-foreground">{formatDate(f.maturityDate)}</span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="mt-1.5">
+                      <div className="h-1 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-amber-400/60 transition-all duration-500" style={{ width: `${progress}%` }} />
+                      </div>
+                      <div className="text-[10px] font-mono text-muted-foreground/60 mt-0.5 text-right">
+                        {elapsed} / {totalDays} days
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex justify-between pt-2 text-xs text-muted-foreground font-mono">
+              <span>FRT Subtotal (AC)</span>
+              <span>{fmtFull(totalFRT_AC)}</span>
+            </div>
+          </div>
+
           {/* Total Assets */}
           <div className="px-5 py-3 mt-auto bg-primary/5 border-t border-primary/20">
             <div className="flex items-center justify-between text-sm font-semibold">
-              <span className="font-display text-foreground">TOTAL ASSETS</span>
-              <span className="font-mono text-primary text-lg">{fmtFull(totalAssets)}</span>
+              <span className="font-display text-foreground">TOTAL ASSETS (AC)</span>
+              <span className="font-mono text-primary text-lg">{fmtFull(totalAssets_AC)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs mt-0.5">
+              <span className="font-mono text-muted-foreground/60">TOTAL ASSETS (MTM)</span>
+              <span className="font-mono text-muted-foreground/60">{fmtFull(totalAssets_MTM)}</span>
             </div>
           </div>
         </div>
@@ -301,7 +413,7 @@ export function VaultBalanceSheet({
               <div>
                 <span className="font-mono text-muted-foreground">Management Fee <span className="text-[10px] opacity-60">→ Platform</span></span>
                 <div className="text-[10px] text-muted-foreground/50 font-mono flex items-center gap-1 mt-0.5">
-                  <Clock className="h-2.5 w-2.5" />{daysSinceInception} days accrued, unpaid
+                  <Clock className="h-2.5 w-2.5" />{daysSinceInception} days accrued · unpaid
                 </div>
               </div>
               <span className="font-mono text-foreground">{fmtFull(fees.accruedManagementFee)}</span>
@@ -310,10 +422,14 @@ export function VaultBalanceSheet({
               <div>
                 <span className="font-mono text-muted-foreground">Performance Fee <span className="text-[10px] opacity-60">→ Curator</span></span>
                 <div className="text-[10px] text-muted-foreground/50 font-mono flex items-center gap-1 mt-0.5">
-                  <Clock className="h-2.5 w-2.5" />{daysSinceInception} days accrued, unpaid
+                  <Clock className="h-2.5 w-2.5" />{daysSinceInception} days accrued · unpaid
                 </div>
               </div>
               <span className="font-mono text-foreground">{fmtFull(fees.accruedPerformanceFee)}</span>
+            </div>
+            <div className="flex justify-between pt-2 text-xs text-muted-foreground font-mono">
+              <span>Fees Subtotal</span>
+              <span>{fmtFull(totalAccruedFees)}</span>
             </div>
           </div>
 
@@ -353,8 +469,12 @@ export function VaultBalanceSheet({
 
             <div className="mt-3 pt-3 border-t border-border/50">
               <div className="flex items-center justify-between mb-1">
-                <span className="font-display font-bold text-foreground text-sm">NAV</span>
-                <span className="font-mono text-primary text-xl font-bold">{fmtFull(nav)}</span>
+                <span className="font-display font-bold text-foreground text-sm">NAV (Amortized Cost)</span>
+                <span className="font-mono text-primary text-xl font-bold">{fmtFull(nav_AC)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-muted-foreground/60 text-xs">NAV (Mark-to-Market)</span>
+                <span className="font-mono text-muted-foreground/60 text-xs">{fmtFull(nav_MTM)}</span>
               </div>
             </div>
 
@@ -384,7 +504,7 @@ export function VaultBalanceSheet({
           <div className="px-5 py-3 mt-auto bg-accent/5 border-t border-accent/20">
             <div className="flex items-center justify-between text-sm font-semibold">
               <span className="font-display text-foreground">TOTAL LIABILITIES + EQUITY</span>
-              <span className="font-mono text-accent text-lg">{fmtFull(totalAssets)}</span>
+              <span className="font-mono text-accent text-lg">{fmtFull(totalAssets_AC)}</span>
             </div>
           </div>
         </div>
@@ -399,7 +519,7 @@ export function VaultBalanceSheet({
       >
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 divide-x divide-border">
           <div className="p-4 text-center">
-            <div className="text-xs text-muted-foreground font-mono mb-1">Daily Yield</div>
+            <div className="text-xs text-muted-foreground font-mono mb-1">Daily Yield (AC)</div>
             <div className="text-lg font-display font-bold text-yield-positive">{fmtFull(dailyYield)}</div>
           </div>
           <div className="p-4 text-center">
@@ -414,12 +534,29 @@ export function VaultBalanceSheet({
           </div>
           <div className="p-4 text-center glow-primary">
             <div className="text-xs text-muted-foreground font-mono mb-1">Est. Net APY</div>
-            <div className="text-lg font-display font-bold text-gradient-primary">{pctShort(estNetAPY)}</div>
+            <div className="text-lg font-display font-bold text-gradient-primary">~{pctShort(estNetAPY)}</div>
           </div>
+        </div>
+        {/* Yield breakdown */}
+        <div className="px-5 py-2.5 border-t border-border/50 flex flex-wrap gap-x-6 gap-y-1.5 justify-center">
+          {rwaPositions.map(r => (
+            <span key={r.token} className="text-[11px] font-mono text-muted-foreground">
+              {r.token} {fmtFull((r.currentValue * r.yieldRate) / 365)}/day
+            </span>
+          ))}
+          {frtAmortized.map(f => {
+            const totalDays = daysBetween(f.purchaseDate, f.maturityDate);
+            const daily = totalDays > 0 ? (f.faceValue - f.purchasePrice) / totalDays : 0;
+            return (
+              <span key={f.token} className="text-[11px] font-mono text-muted-foreground">
+                {f.token} {fmtFull(daily)}/day
+              </span>
+            );
+          })}
         </div>
         <div className="px-5 py-2.5 border-t border-border/50 flex flex-wrap gap-x-8 gap-y-1.5 justify-center">
           <span className="text-[11px] font-mono text-muted-foreground">
-            Management: {pctShort(fees.managementFeeRate)}/yr of AUM → {fmtFull(dailyMgmtFee)}/day accruing
+            Management: {pctShort(fees.managementFeeRate)}/yr of AUM → ~{fmtFull(dailyMgmtFee)}/day accruing
           </span>
           <span className="text-[11px] font-mono text-muted-foreground">
             Performance: {pctShort(fees.performanceFeeRate)} of profits above HWM → accruing

@@ -3,12 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertTriangle, Activity,
-  Coins, ArrowDownToLine, ArrowUpFromLine, Zap, Pause,
+  Coins, ArrowDownToLine, ArrowUpFromLine, Zap, Pause, Timer,
 } from "lucide-react";
 import { VaultBalanceSheet } from "@/components/VaultBalanceSheet";
 
-/* ─── Example Data — $20M TVL Vault, 64 days since inception (2025-01-01 → 2025-03-05) ─── */
-const VAULT_CASH = 1_570_000;
+/* ─── Example Data — ~$36.4M Total Assets, 64 days since inception ─── */
+const VAULT_CASH = 1_670_000;
 
 const VAULT_RWA = [
   {
@@ -28,6 +28,31 @@ const VAULT_RWA = [
     costBasis: 10_990_000,
     currentValue: 10_990_000,
     yieldRate: 0.07,
+  },
+];
+
+const VAULT_FRT = [
+  {
+    protocol: "TermMax",
+    token: "FT-USDC-Jun25",
+    assetType: "fixed_rate_token" as const,
+    faceValue: 2_650_000,
+    purchasePrice: 2_500_000,
+    currentPrice: 2_500_000,
+    purchaseDate: "2025-03-05",
+    maturityDate: "2025-06-03",
+    impliedYield: 0.0822,
+  },
+  {
+    protocol: "Pendle",
+    token: "PT-sUSDe-Sep25",
+    assetType: "fixed_rate_token" as const,
+    faceValue: 2_000_000,
+    purchasePrice: 1_900_000,
+    currentPrice: 1_900_000,
+    purchaseDate: "2025-03-05",
+    maturityDate: "2025-09-25",
+    impliedYield: 0.0944,
   },
 ];
 
@@ -61,10 +86,10 @@ const VAULT_FEES = {
 };
 
 const VAULT_SHARES = {
-  totalSharesOutstanding: 20_000_000,
-  lpInvestedCapital: 20_000_000,
+  totalSharesOutstanding: 24_500_000,
+  lpInvestedCapital: 24_500_000,
   accumulatedEarnings: 751_568,
-  navPerShare: 1.0148,
+  navPerShare: 1.0122,
 };
 
 export default function CuratorDashboard() {
@@ -83,10 +108,12 @@ export default function CuratorDashboard() {
           <VaultBalanceSheet
             cash={VAULT_CASH}
             rwaPositions={VAULT_RWA}
+            frtPositions={VAULT_FRT}
             borrowPositions={VAULT_BORROWS}
             fees={VAULT_FEES}
             shares={VAULT_SHARES}
             daysSinceInception={64}
+            today="2025-03-05"
           />
         </motion.div>
 
@@ -96,6 +123,7 @@ export default function CuratorDashboard() {
             <Tabs defaultValue="rwa">
               <TabsList className="w-full bg-secondary mb-4 flex-wrap h-auto gap-0.5 p-1">
                 <TabsTrigger value="rwa" className="text-xs font-mono flex-1"><Coins className="h-3 w-3 mr-1" />RWA</TabsTrigger>
+                <TabsTrigger value="frt" className="text-xs font-mono flex-1"><Timer className="h-3 w-3 mr-1" />FRT</TabsTrigger>
                 <TabsTrigger value="borrow" className="text-xs font-mono flex-1"><Activity className="h-3 w-3 mr-1" />Borrow</TabsTrigger>
                 <TabsTrigger value="emergency" className="text-xs font-mono flex-1"><AlertTriangle className="h-3 w-3 mr-1" />Emergency</TabsTrigger>
               </TabsList>
@@ -112,6 +140,20 @@ export default function CuratorDashboard() {
                   <h4 className="font-display font-semibold text-sm text-foreground mb-3">Redeem RWA Token</h4>
                   <Button variant="outline" className="w-full"><ArrowUpFromLine className="h-4 w-4" />Redeem</Button>
                 </div>
+              </TabsContent>
+
+              <TabsContent value="frt" className="space-y-4">
+                <h4 className="font-display font-semibold text-sm text-foreground">Buy Fixed Rate Token</h4>
+                <select className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm text-foreground font-mono">
+                  <option>FT-USDC-Jun25 (TermMax, 8.22%)</option>
+                  <option>PT-sUSDe-Sep25 (Pendle, 9.44%)</option>
+                </select>
+                <input type="number" placeholder="USDC Amount" className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground" />
+                <div className="p-3 rounded-lg bg-secondary/50 border border-border space-y-1.5 text-xs">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Implied Yield</span><span className="text-primary font-mono">8.22%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Maturity</span><span className="text-foreground font-mono">Jun 3, 2025</span></div>
+                </div>
+                <Button className="w-full"><ArrowDownToLine className="h-4 w-4" />Buy FRT</Button>
               </TabsContent>
 
               <TabsContent value="borrow" className="space-y-4">
