@@ -208,7 +208,7 @@ function RateTypeBadge({ type }: { type: RateType }) {
       "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold font-mono uppercase tracking-wider",
       type === "fixed"
         ? "bg-primary/15 text-primary border border-primary/20"
-        : "bg-accent/15 text-accent-foreground border border-accent/30"
+        : "bg-yellow-500/25 text-yellow-400 border border-yellow-500/40"
     )}>
       {type}
     </span>
