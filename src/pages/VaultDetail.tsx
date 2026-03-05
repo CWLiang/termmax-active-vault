@@ -10,6 +10,7 @@ import {
   PieChart as PieChartIcon, Activity, ExternalLink, Info, FileText, Lock, Copy
 } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid } from "recharts";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
