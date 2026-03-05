@@ -488,6 +488,7 @@ function WithdrawPanel() {
   const [amount, setAmount] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const parsedAmount = parseFloat(amount) || 0;
+  const userBalance = 5230.42; // Mock user balance in USDC
   const exceedsBuffer = parsedAmount > VAULT_DATA.bufferAmount;
 
   return (
@@ -498,11 +499,14 @@ function WithdrawPanel() {
             <label className="text-xs text-muted-foreground font-mono mb-1.5 block">Withdraw Amount (USDC)</label>
             <Input type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)}
               className="font-mono text-lg bg-secondary border-border" />
+            <div className="flex justify-end mt-1">
+              <span className="text-[10px] text-muted-foreground font-mono">Balance: {userBalance.toLocaleString()} USDC</span>
+            </div>
           </div>
            <div className="p-3 rounded-lg bg-secondary/50 border border-border">
              <div className="flex justify-between text-xs">
-               <span className="text-muted-foreground">Instant Liquidity</span>
-               <span className="text-buffer-safe font-mono">{formatUSD(VAULT_DATA.bufferAmount)}</span>
+               <span className="text-muted-foreground">Instant Withdrawable</span>
+               <span className="text-buffer-safe font-mono">{(VAULT_DATA.bufferAmount / 1e6).toFixed(2)}M USDC</span>
              </div>
            </div>
           {exceedsBuffer && parsedAmount > 0 && (
