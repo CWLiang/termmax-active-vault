@@ -81,28 +81,35 @@ interface AllocationItem {
   color: string;
 }
 
+const CATEGORY_COLORS: Record<AllocationCategory, string> = {
+  RWA: "hsl(187, 100%, 50%)",
+  Yield: "hsl(270, 70%, 55%)",
+  Loan: "hsl(0, 65%, 55%)",
+  Cash: "hsl(215, 15%, 55%)",
+};
+
 const ALLOCATION_DATA: AllocationItem[] = [
   // RWA
-  { name: "OUSG", protocol: "Ondo Finance", category: "RWA", rateType: null, value: 42, amount: 5250000, color: "hsl(187, 100%, 50%)" },
-  { name: "DigiFT Treasury", protocol: "DigiFT", category: "RWA", rateType: null, value: 12, amount: 1500000, color: "hsl(187, 70%, 40%)" },
+  { name: "OUSG", protocol: "Ondo Finance", category: "RWA", rateType: null, value: 42, amount: 5250000, color: CATEGORY_COLORS.RWA },
+  { name: "DigiFT Treasury", protocol: "DigiFT", category: "RWA", rateType: null, value: 12, amount: 1500000, color: CATEGORY_COLORS.RWA },
   // Yield — Variable
-  { name: "USDC Supply", protocol: "Morpho", category: "Yield", rateType: "variable", value: 8, amount: 1000000, color: "hsl(270, 70%, 55%)" },
+  { name: "USDC Supply", protocol: "Morpho", category: "Yield", rateType: "variable", value: 8, amount: 1000000, color: CATEGORY_COLORS.Yield },
   // Yield — Fixed
-  { name: "FT-USDC-Jun26", protocol: "TermMax", category: "Yield", rateType: "fixed", value: 10, amount: 1250000, color: "hsl(40, 90%, 55%)" },
-  { name: "PT-sUSDe-Mar26", protocol: "Pendle", category: "Yield", rateType: "fixed", value: 6, amount: 750000, color: "hsl(40, 70%, 45%)" },
+  { name: "FT-USDC-Jun26", protocol: "TermMax", category: "Yield", rateType: "fixed", value: 10, amount: 1250000, color: CATEGORY_COLORS.Yield },
+  { name: "PT-sUSDe-Mar26", protocol: "Pendle", category: "Yield", rateType: "fixed", value: 6, amount: 750000, color: CATEGORY_COLORS.Yield },
   // Loan — Variable
-  { name: "USDC Borrow", protocol: "AAVE", category: "Loan", rateType: "variable", value: 5, amount: 625000, color: "hsl(0, 70%, 55%)" },
+  { name: "USDC Borrow", protocol: "AAVE", category: "Loan", rateType: "variable", value: 5, amount: 625000, color: CATEGORY_COLORS.Loan },
   // Loan — Fixed
-  { name: "GT-USDC-Jun26", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 2, amount: 250000, color: "hsl(0, 50%, 45%)" },
+  { name: "GT-USDC-Jun26", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 2, amount: 250000, color: CATEGORY_COLORS.Loan },
   // Cash
-  { name: "Cash Buffer", protocol: "Vault", category: "Cash", rateType: null, value: 15, amount: 1875000, color: "hsl(215, 15%, 55%)" },
+  { name: "Cash Buffer", protocol: "Vault", category: "Cash", rateType: null, value: 15, amount: 1875000, color: CATEGORY_COLORS.Cash },
 ];
 
-const CATEGORY_META: Record<AllocationCategory, { label: string; icon: string }> = {
-  RWA: { label: "RWA Holdings", icon: "🏛" },
-  Yield: { label: "Yield Positions", icon: "📈" },
-  Loan: { label: "Loan Positions", icon: "💸" },
-  Cash: { label: "Cash", icon: "💵" },
+const CATEGORY_META: Record<AllocationCategory, { label: string }> = {
+  RWA: { label: "RWA" },
+  Yield: { label: "Yield" },
+  Loan: { label: "Loan" },
+  Cash: { label: "Cash" },
 };
 
 // Group for pie chart (by category)
@@ -114,7 +121,7 @@ const PIE_DATA = Object.entries(
 ).map(([name, value]) => ({
   name,
   value,
-  color: ALLOCATION_DATA.find((d) => d.category === name)?.color || "hsl(215, 15%, 55%)",
+  color: CATEGORY_COLORS[name as AllocationCategory],
 }));
 
 const MOCK_ACTIONS = [
@@ -268,59 +275,71 @@ function RateTypeBadge({ type }: { type: RateType }) {
   );
 }
 
-// --- Transparency / Asset Allocation ---
+// --- Portfolio / Asset Allocation ---
 function TransparencySection() {
   const categories: AllocationCategory[] = ["RWA", "Yield", "Loan", "Cash"];
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
       className="rounded-xl border border-border bg-card p-5">
-      <h3 className="font-display font-semibold text-foreground mb-4">Transparency — Asset Allocation</h3>
-      <div className="flex flex-col sm:flex-row items-start gap-6">
+      <h3 className="font-display font-semibold text-foreground mb-5">Portfolio — Asset Allocation</h3>
+      <div className="flex flex-col sm:flex-row items-start gap-8">
         {/* Pie chart by category */}
-        <div className="w-40 h-40 flex-shrink-0 self-center">
+        <div className="w-44 h-44 flex-shrink-0 self-center">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={PIE_DATA} innerRadius={42} outerRadius={65} dataKey="value" strokeWidth={2} stroke="hsl(220, 18%, 10%)">
+              <Pie data={PIE_DATA} innerRadius={44} outerRadius={68} dataKey="value" strokeWidth={2} stroke="hsl(220, 18%, 10%)">
                 {PIE_DATA.map((entry, i) => (
                   <Cell key={i} fill={entry.color} />
                 ))}
               </Pie>
             </PieChart>
           </ResponsiveContainer>
+          {/* Legend under pie */}
+          <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2">
+            {PIE_DATA.map((entry, i) => (
+              <span key={i} className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.color }} />
+                {entry.name} {entry.value}%
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Categorized breakdown */}
-        <div className="flex-1 w-full space-y-4">
+        <div className="flex-1 w-full space-y-5">
           {categories.map((cat) => {
             const items = ALLOCATION_DATA.filter((d) => d.category === cat);
             if (items.length === 0) return null;
             const meta = CATEGORY_META[cat];
             const catTotal = items.reduce((s, i) => s + i.value, 0);
             const catAmount = items.reduce((s, i) => s + i.amount, 0);
+            const catColor = CATEGORY_COLORS[cat];
 
             return (
               <div key={cat}>
-                {/* Category header */}
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <span>{meta.icon}</span> {meta.label}
+                {/* Category header with color accent */}
+                <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-border">
+                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: catColor }}>
+                    <span className="w-3 h-3 rounded" style={{ background: catColor }} />
+                    {meta.label}
                   </span>
-                  <span className="text-xs font-mono text-muted-foreground">{catTotal}% · {formatUSD(catAmount)}</span>
+                  <span className="text-xs font-mono font-semibold text-foreground">{catTotal}%
+                    <span className="text-muted-foreground font-normal ml-1.5">{formatUSD(catAmount)}</span>
+                  </span>
                 </div>
 
-                {/* Items */}
-                <div className="space-y-0">
+                {/* Items — clean, no color dots */}
+                <div className="pl-5">
                   {items.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
+                    <div key={i} className="flex items-center justify-between py-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: item.color }} />
                         <span className="text-sm text-foreground">{item.name}</span>
-                        <span className="text-[10px] text-muted-foreground font-mono">{item.protocol}</span>
+                        <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
                         <RateTypeBadge type={item.rateType} />
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-sm text-foreground">{item.value}%</span>
+                      <div className="flex items-center gap-4">
+                        <span className="font-mono text-sm text-foreground w-10 text-right">{item.value}%</span>
                         <span className="font-mono text-xs text-muted-foreground w-16 text-right">{formatUSD(item.amount)}</span>
                       </div>
                     </div>
