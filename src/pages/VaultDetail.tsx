@@ -89,8 +89,8 @@ const CATEGORY_COLORS: Record<AllocationCategory, string> = {
 };
 
 const ALLOCATION_DATA: AllocationItem[] = [
-  { name: "OUSG", protocol: "Ondo Finance", category: "RWA", rateType: null, value: 42, amount: 5250000, color: CATEGORY_COLORS.RWA },
-  { name: "DigiFT Treasury", protocol: "DigiFT", category: "RWA", rateType: null, value: 12, amount: 1500000, color: CATEGORY_COLORS.RWA },
+  { name: "bEQTY", protocol: "DigiFT", category: "RWA", rateType: null, value: 32, amount: 4000000, color: CATEGORY_COLORS.RWA },
+  { name: "iSNR", protocol: "DigiFT", category: "RWA", rateType: null, value: 22, amount: 2750000, color: CATEGORY_COLORS.RWA },
   { name: "USDC Supply", protocol: "Morpho", category: "Yield", rateType: "variable", value: 8, amount: 1000000, color: CATEGORY_COLORS.Yield },
   { name: "FT-USDC-Jun26", protocol: "TermMax", category: "Yield", rateType: "fixed", value: 10, amount: 1250000, color: CATEGORY_COLORS.Yield },
   { name: "PT-sUSDe-Mar26", protocol: "Pendle", category: "Yield", rateType: "fixed", value: 6, amount: 750000, color: CATEGORY_COLORS.Yield },
