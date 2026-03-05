@@ -260,9 +260,9 @@ function PortfolioSection() {
           </a>
         )}
       </div>
-      <div className="flex items-center gap-4">
-        <span className="font-mono text-sm text-foreground w-10 text-right">{item.value}%</span>
-        <span className="font-mono text-xs text-muted-foreground w-16 text-right">{formatUSD(item.amount)}</span>
+      <div className="flex items-center">
+        <span className="font-mono text-xs text-foreground w-12 text-right">{item.value}%</span>
+        <span className="font-mono text-xs text-muted-foreground w-20 text-right">{formatUSD(item.amount)}</span>
       </div>
     </div>
   );
