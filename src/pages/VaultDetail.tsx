@@ -456,21 +456,6 @@ function DepositPanel() {
       {parsedAmount > 0 && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2 p-3 rounded-lg bg-secondary/50 border border-border">
           <div className="flex justify-between text-xs">
-            <span className="text-muted-foreground">Estimated APY</span>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger>
-                  <span className="text-primary font-mono">{VAULT_DATA.apy7d}% <Info className="h-2.5 w-2.5 inline text-muted-foreground" /></span>
-                </TooltipTrigger>
-                <TooltipContent className="text-xs">Historical 7d APY. Not guaranteed.</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-muted-foreground">Vault Shares</span>
-            <span className="text-foreground font-mono">{estimatedShares.toFixed(4)}</span>
-          </div>
-          <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">Remaining Capacity</span>
             <span className="text-foreground font-mono">{formatUSD(VAULT_DATA.capacity - VAULT_DATA.tvl)}</span>
           </div>
