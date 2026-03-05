@@ -499,13 +499,12 @@ function WithdrawPanel() {
             <Input type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)}
               className="font-mono text-lg bg-secondary border-border" />
           </div>
-          <div className="p-3 rounded-lg bg-secondary/50 border border-border space-y-2">
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Instant Available</span>
-              <span className="text-buffer-safe font-mono">{formatUSD(VAULT_DATA.bufferAmount)}</span>
-            </div>
-            <Gauge value={VAULT_DATA.bufferRatio} max={100} label="Cash Buffer" thresholds={{ warning: 70, danger: 90 }} />
-          </div>
+           <div className="p-3 rounded-lg bg-secondary/50 border border-border">
+             <div className="flex justify-between text-xs">
+               <span className="text-muted-foreground">Instant Liquidity</span>
+               <span className="text-buffer-safe font-mono">{formatUSD(VAULT_DATA.bufferAmount)}</span>
+             </div>
+           </div>
           {exceedsBuffer && parsedAmount > 0 && (
             <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-lg bg-buffer-warning/10 border border-buffer-warning/30 space-y-2">
               <p className="text-xs text-buffer-warning">
