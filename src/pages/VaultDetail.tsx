@@ -836,10 +836,16 @@ export default function VaultDetailPage() {
       </div>
 
       {/* Risk Disclaimer */}
-      <div className="mt-8 mb-2 text-center">
-        <p className="text-[10px] text-muted-foreground/50 font-mono leading-relaxed max-w-2xl mx-auto">
-          Risk Disclaimer — Investing in Midas-issued tokens involves risk, including potential loss of principal. Please review all relevant documentation before proceeding.
-        </p>
+      <div className="mt-6 mb-2 rounded-lg border border-border/40 bg-card/50 px-5 py-4 max-w-6xl mx-auto">
+        <div className="flex items-start gap-2.5">
+          <Info className="h-3.5 w-3.5 text-muted-foreground/40 mt-0.5 flex-shrink-0" />
+          <div>
+            <h4 className="text-[11px] font-mono font-semibold text-muted-foreground/50 uppercase tracking-wider mb-1.5">Risk Disclaimer</h4>
+            <p className="text-[11px] text-muted-foreground/40 leading-relaxed">
+              Investing in Midas-issued tokens involves risk, including potential loss of principal. Please review all relevant documentation before proceeding.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
