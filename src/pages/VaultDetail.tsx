@@ -676,6 +676,20 @@ export default function VaultDetailPage() {
 
         {/* Right: Deposit/Withdraw Panel */}
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }} className="space-y-6">
+          {/* My Position — compact deposited display */}
+          <div className="rounded-xl border border-primary/20 bg-card p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">My Position</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-lg font-display font-bold text-foreground">10,000.00</span>
+                <span className="text-xs font-mono text-muted-foreground">USDC</span>
+              </div>
+            </div>
+            <div className="flex justify-end mt-0.5">
+              <span className="text-[10px] font-mono text-muted-foreground">≈ $10,000.00</span>
+            </div>
+          </div>
+
           <div className="rounded-xl border border-border bg-card p-5 sticky top-6">
             <Tabs defaultValue="deposit">
               <TabsList className="w-full bg-secondary mb-4">
@@ -689,34 +703,6 @@ export default function VaultDetailPage() {
               <TabsContent value="deposit"><DepositPanel /></TabsContent>
               <TabsContent value="withdraw"><WithdrawPanel /></TabsContent>
             </Tabs>
-          </div>
-
-          {/* My Position */}
-          <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-            <h3 className="font-display font-semibold text-foreground text-sm">My Position</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Deposited</span>
-                <div className="text-right">
-                  <span className="font-mono text-foreground">10,000.00 USDC</span>
-                  <span className="block text-[10px] font-mono text-muted-foreground">≈ $10,000.00</span>
-                </div>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Current Value</span>
-                <div className="text-right">
-                  <span className="font-mono text-foreground">10,342.00 USDC</span>
-                  <span className="block text-[10px] font-mono text-muted-foreground">≈ $10,342.00</span>
-                </div>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Realized Yield</span>
-                <div className="text-right">
-                  <span className="font-mono text-yield-positive">+342.00 USDC</span>
-                  <span className="block text-[10px] font-mono text-muted-foreground">≈ +$342.00</span>
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* Contract Info */}
