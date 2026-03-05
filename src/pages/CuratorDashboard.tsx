@@ -38,7 +38,7 @@ export default function CuratorDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Left: Balance Sheet (2 cols) */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="xl:col-span-2">
-          <BalanceSheet />
+          <VaultBalanceSheet cash={VAULT_CASH} rwaPositions={VAULT_RWA} borrowPositions={VAULT_BORROWS} />
         </motion.div>
 
         {/* Right: Action Panel */}
