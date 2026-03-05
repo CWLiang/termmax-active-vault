@@ -162,6 +162,15 @@ function VaultDetailsSection() {
       <Table>
         <TableBody>
           <TableRow className="border-border">
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0 w-40">Curator</TableCell>
+            <TableCell className="text-sm py-2.5 px-0">
+              <a href="https://keyrock.com/" target="_blank" rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1">
+                {VAULT_DATA.curator} <ExternalLink className="h-3 w-3" />
+              </a>
+            </TableCell>
+          </TableRow>
+          <TableRow className="border-border">
             <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0 w-40">Yield Type</TableCell>
             <TableCell className="text-foreground text-sm py-2.5 px-0">{VAULT_DATA.yieldType}</TableCell>
           </TableRow>
