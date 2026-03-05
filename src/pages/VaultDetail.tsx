@@ -19,22 +19,22 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 const VAULT_DATA = {
   name: "RWA Enhanced Yield",
   curator: "Keyrock Capital",
-  strategy: "Leveraged RWA yield via DigiFT tokens, multi-protocol DeFi lending, and fixed-rate positions on TermMax & Pendle",
-  strategyDetail: "This vault deploys deposited USDC across a diversified portfolio. The core allocation (54%) is in RWA tokens — bEQTY and iSNR via DigiFT — providing institutional-grade fixed-income exposure. To amplify returns, the vault borrows USDC from AAVE (variable rate) and TermMax (fixed rate), creating a leverage loop on the RWA positions. Additional yield is generated through USDC supply on Morpho, fixed-rate FT positions on TermMax, and PT-sUSDe on Pendle. A 15% USDC buffer is maintained in the vault for instant withdrawal liquidity. All borrowing costs are optimized by blending variable (AAVE) and fixed-rate (TermMax GT) sources.",
+  strategy: "Leveraged RWA yield via DigiFT tokens (bEQTY, iSNR) and fixed-rate borrowing on TermMax to amplify returns",
+  strategyDetail: "This vault deploys deposited USDC into institutional-grade RWA tokens — bEQTY (BNY equity fund) and iSNR (Invesco private credit) — via DigiFT. To amplify returns, the vault collateralizes RWA tokens on TermMax to borrow USDC at locked fixed rates (4%), then reinvests borrowed USDC into additional RWA tokens (leverage loop). A ~5% USDC buffer is maintained for instant withdrawal liquidity. Net yield = RWA yield (6.5–7%) minus borrowing cost (4%), amplified by 1.57x leverage.",
   apy7d: 8.42,
   apy30d: 7.95,
-  apy90d: 8.12,
-  tvl: 12500000,
-  capacity: 25000000,
-  bufferRatio: 15.3,
-  bufferAmount: 1912500,
-  nav: 1.0342,
-  navDelta24h: 0.012,
-  navDelta7d: 0.34,
-  sharePrice: 1.0342,
-  positions: { rwa: 62, termmax: 23, cash: 15 },
-  managementFee: 1.0,
-  performanceFee: 10.0,
+  apy90d: 7.70,
+  tvl: 20_000_000,
+  capacity: 50_000_000,
+  bufferRatio: 5.0,
+  bufferAmount: 1_570_000,
+  nav: 1.0000,
+  navDelta24h: 0.021,
+  navDelta7d: 0.15,
+  sharePrice: 1.0000,
+  positions: { rwa: 95, cash: 5 },
+  managementFee: 2.0,
+  performanceFee: 20.0,
   yieldType: "Auto-compounded in NAV",
   redemptionTimeline: "10–30 days queued",
   custody: "Fordefi",
@@ -52,15 +52,15 @@ const VAULT_DATA = {
 // Mock NAV history for chart — different lengths per timeframe
 const NAV_HISTORY_7D = Array.from({ length: 7 }, (_, i) => ({
   day: `Feb ${i + 22}`,
-  nav: +(1.028 + Math.random() * 0.008 + i * 0.0008).toFixed(4),
+  nav: +(0.996 + Math.random() * 0.005 + i * 0.0006).toFixed(4),
 }));
 const NAV_HISTORY_30D = Array.from({ length: 30 }, (_, i) => ({
   day: `Feb ${i + 1}`,
-  nav: +(1.02 + Math.random() * 0.015 + i * 0.0005).toFixed(4),
+  nav: +(0.993 + Math.random() * 0.008 + i * 0.0003).toFixed(4),
 }));
 const NAV_HISTORY_90D = Array.from({ length: 90 }, (_, i) => ({
   day: `Dec ${(i % 31) + 1}`,
-  nav: +(1.005 + Math.random() * 0.02 + i * 0.0003).toFixed(4),
+  nav: +(0.988 + Math.random() * 0.012 + i * 0.00013).toFixed(4),
 }));
 
 const NAV_DATA_MAP: Record<string, typeof NAV_HISTORY_7D> = {
@@ -75,7 +75,7 @@ const APY_MAP: Record<string, number> = {
 };
 
 type RateType = "fixed" | "variable" | null;
-type AllocationCategory = "RWA" | "Yield" | "Loan" | "Instant Liquidity";
+type AllocationCategory = "RWA" | "Loan" | "Instant Liquidity";
 
 interface AllocationItem {
   name: string;
@@ -90,20 +90,17 @@ interface AllocationItem {
 
 const CATEGORY_COLORS: Record<AllocationCategory, string> = {
   RWA: "hsl(187, 100%, 50%)",
-  Yield: "hsl(270, 70%, 55%)",
   Loan: "hsl(0, 65%, 55%)",
   "Instant Liquidity": "hsl(160, 70%, 45%)",
 };
 
+// Percentages are of Total Assets ($31.4M gross)
 const ALLOCATION_DATA: AllocationItem[] = [
-  { name: "bEQTY", protocol: "DigiFT", category: "RWA", rateType: null, value: 32, amount: 4000000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=bEQTY" },
-  { name: "iSNR", protocol: "DigiFT", category: "RWA", rateType: null, value: 22, amount: 2750000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=iSNR" },
-  { name: "USDC Supply", protocol: "Morpho", category: "Yield", rateType: "variable", value: 8, amount: 1000000, color: CATEGORY_COLORS.Yield },
-  { name: "FT-USDC-Jun26", protocol: "TermMax", category: "Yield", rateType: "fixed", value: 10, amount: 1250000, color: CATEGORY_COLORS.Yield },
-  { name: "PT-sUSDe-Mar26", protocol: "Pendle", category: "Yield", rateType: "fixed", value: 6, amount: 750000, color: CATEGORY_COLORS.Yield },
-  { name: "USDC Borrow", protocol: "AAVE", category: "Loan", rateType: "variable", value: 5, amount: 625000, color: CATEGORY_COLORS.Loan },
-  { name: "GT-USDC-Jun26", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 2, amount: 250000, color: CATEGORY_COLORS.Loan },
-  { name: "USDC", protocol: "Vault", category: "Instant Liquidity", rateType: null, value: 15, amount: 1875000, color: CATEGORY_COLORS["Instant Liquidity"] },
+  { name: "bEQTY", protocol: "DigiFT", category: "RWA", rateType: null, value: 60, amount: 18_840_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=bEQTY" },
+  { name: "iSNR", protocol: "DigiFT", category: "RWA", rateType: null, value: 35, amount: 10_990_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=iSNR" },
+  { name: "GT-1 (bEQTY collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 23, amount: 7_200_000, color: CATEGORY_COLORS.Loan },
+  { name: "GT-2 (iSNR collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 13, amount: 4_200_000, color: CATEGORY_COLORS.Loan },
+  { name: "USDC", protocol: "Vault", category: "Instant Liquidity", rateType: null, value: 5, amount: 1_570_000, color: CATEGORY_COLORS["Instant Liquidity"] },
 ];
 
 const CATEGORY_META: Record<AllocationCategory, { label: string }> = {
