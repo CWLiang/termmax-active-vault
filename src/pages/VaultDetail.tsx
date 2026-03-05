@@ -272,12 +272,36 @@ function RateTypeBadge({ type }: { type: RateType }) {
   );
 }
 
-// --- Portfolio / Asset Allocation (excludes Loan) ---
+// --- Portfolio — Combined Assets, Loans & NAV ---
 function PortfolioSection() {
+  const totalAssets = ALLOCATION_DATA.filter(d => d.category !== "Loan").reduce((s, i) => s + i.amount, 0);
+  const totalLoans = LOAN_DATA.reduce((s, i) => s + i.amount, 0);
+  const nav = totalAssets - totalLoans;
+  const loanColor = CATEGORY_COLORS.Loan;
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
       className="rounded-xl border border-border bg-card p-5">
       <h3 className="font-display font-semibold text-foreground mb-5">Portfolio — Asset Allocation</h3>
+
+      {/* NAV Summary Bar */}
+      <div className="rounded-lg bg-secondary/50 border border-border p-4 mb-6">
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Total Assets</div>
+            <div className="text-lg font-mono font-bold text-foreground">{formatUSD(totalAssets)}</div>
+          </div>
+          <div className="flex flex-col items-center justify-center">
+            <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Outstanding Loans</div>
+            <div className="text-lg font-mono font-bold" style={{ color: loanColor }}>− {formatUSD(totalLoans)}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Net Asset Value</div>
+            <div className="text-lg font-mono font-bold text-primary">{formatUSD(nav)}</div>
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col sm:flex-row items-start gap-8">
         {/* Pie chart — assets only */}
         <div className="w-44 flex-shrink-0 self-center">
@@ -302,8 +326,9 @@ function PortfolioSection() {
           </div>
         </div>
 
-        {/* Asset breakdown */}
+        {/* Asset + Loan breakdown */}
         <div className="flex-1 w-full space-y-5">
+          {/* Asset categories */}
           {ASSET_CATEGORIES.map((cat) => {
             const items = ALLOCATION_DATA.filter((d) => d.category === cat);
             if (items.length === 0) return null;
@@ -341,46 +366,32 @@ function PortfolioSection() {
               </div>
             );
           })}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
 
-// --- Loan Positions (separate panel) ---
-function LoanSection() {
-  const totalLoan = LOAN_DATA.reduce((s, i) => s + i.amount, 0);
-  const catColor = CATEGORY_COLORS.Loan;
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-      className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-display font-semibold text-foreground flex items-center gap-2">
-          <span className="w-3 h-3 rounded" style={{ background: catColor }} />
-          Outstanding Loans
-        </h3>
-        <span className="text-sm font-mono font-semibold" style={{ color: catColor }}>{formatUSD(totalLoan)}</span>
-      </div>
-      <div className="space-y-0">
-        {LOAN_DATA.map((item, i) => (
-          <div key={i} className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-foreground">{item.name}</span>
-              <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
-              <RateTypeBadge type={item.rateType} />
+          {/* Loan section within same panel */}
+          <div>
+            <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-border">
+              <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: loanColor }}>
+                <span className="w-3 h-3 rounded" style={{ background: loanColor }} />
+                Loans (Liabilities)
+              </span>
+              <span className="text-xs font-mono font-semibold" style={{ color: loanColor }}>
+                {formatUSD(totalLoans)}
+              </span>
             </div>
-            <span className="font-mono text-sm text-foreground">{formatUSD(item.amount)}</span>
+            <div className="pl-5">
+              {LOAN_DATA.map((item, i) => (
+                <div key={i} className="flex items-center justify-between py-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-foreground">{item.name}</span>
+                    <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
+                    <RateTypeBadge type={item.rateType} />
+                  </div>
+                  <span className="font-mono text-sm text-foreground">{formatUSD(item.amount)}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        ))}
-      </div>
-      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-        <span>Net Asset Value = Assets − Loans</span>
-        <span className="font-mono text-foreground font-semibold">
-          {formatUSD(
-            ALLOCATION_DATA.filter(d => d.category !== "Loan").reduce((s, i) => s + i.amount, 0) - totalLoan
-          )}
-        </span>
+        </div>
       </div>
     </motion.div>
   );
