@@ -199,64 +199,6 @@ function FactsheetSection() {
   );
 }
 
-// --- Redemption Capacity Donut ---
-function RedemptionCapacity() {
-  const bufferPct = VAULT_DATA.bufferRatio;
-  const deployedPct = 100 - bufferPct;
-  const data = [
-    { name: "Cash Buffer", value: bufferPct },
-    { name: "Deployed", value: deployedPct },
-  ];
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
-      className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <h3 className="font-display font-semibold text-foreground">Instant Redemption Capacity</h3>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger><Info className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger>
-            <TooltipContent className="max-w-xs text-xs">
-              Cash buffer available for instant withdrawals. Withdrawals exceeding the buffer are queued and processed within 1–3 days.
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-      <div className="flex items-center gap-6">
-        <div className="w-32 h-32 relative">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={data} innerRadius={38} outerRadius={55} dataKey="value" startAngle={90} endAngle={-270} strokeWidth={0}>
-                <Cell fill="hsl(160, 70%, 45%)" />
-                <Cell fill="hsl(220, 15%, 18%)" />
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-lg font-mono font-bold text-foreground">{bufferPct.toFixed(1)}%</span>
-          </div>
-        </div>
-        <div className="flex-1 space-y-3">
-          <div>
-            <div className="text-xs text-muted-foreground font-mono mb-0.5">Available Instantly</div>
-            <div className="text-lg font-mono font-semibold text-buffer-safe">{formatUSD(VAULT_DATA.bufferAmount)}</div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground font-mono mb-0.5">Total TVL</div>
-            <div className="text-sm font-mono text-foreground">{formatUSD(VAULT_DATA.tvl)}</div>
-          </div>
-          <div className="h-2 rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full bg-buffer-safe transition-all" style={{ width: `${(VAULT_DATA.tvl / VAULT_DATA.capacity) * 100}%` }} />
-          </div>
-          <div className="text-xs text-muted-foreground font-mono">
-            Vault Utilization: {formatUSD(VAULT_DATA.tvl)} / {formatUSD(VAULT_DATA.capacity)}
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
 // --- Rate Type Badge ---
 function RateTypeBadge({ type }: { type: RateType }) {
   if (!type) return null;
@@ -661,8 +603,6 @@ export default function VaultDetailPage() {
 
           {/* 2. Portfolio — Asset Allocation */}
           <PortfolioSection />
-          {/* 3. Redemption Capacity (visual) */}
-          <RedemptionCapacity />
 
           {/* 4. Strategy (text, expandable) */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="rounded-xl border border-border bg-card p-5 space-y-3">
