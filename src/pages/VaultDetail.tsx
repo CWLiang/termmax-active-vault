@@ -365,9 +365,12 @@ function PortfolioSection() {
                 <span className="w-3 h-3 rounded" style={{ background: loanColor }} />
                 Loans (Liabilities)
               </span>
-              <span className="text-xs font-mono font-semibold" style={{ color: loanColor }}>
-                {formatUSD(totalLoans)}
-              </span>
+              <div className="flex items-center">
+                <span className="w-12"></span>
+                <span className="font-mono text-xs font-semibold w-20 text-right" style={{ color: loanColor }}>
+                  {formatUSD(totalLoans)}
+                </span>
+              </div>
             </div>
             <div className="pl-5">
               <CollapsibleItems items={LOAN_DATA} renderItem={renderLoanItem} />
