@@ -13,9 +13,9 @@ const MOCK_VAULTS = [
     strategy: "RWA collateral + fixed-rate leverage on TermMax",
     apy7d: 8.42,
     apy30d: 7.95,
-    tvl: 12500000,
-    capacity: 25000000,
-    bufferRatio: 15.3,
+    tvl: 20_296_699,
+    capacity: 50_000_000,
+    bufferRatio: 4.9,
     riskLevel: "Medium",
   },
   {
@@ -25,8 +25,8 @@ const MOCK_VAULTS = [
     strategy: "DigiFT T-bill + TermMax fixed-rate lending",
     apy7d: 6.18,
     apy30d: 6.05,
-    tvl: 8200000,
-    capacity: 20000000,
+    tvl: 8_200_000,
+    capacity: 20_000_000,
     bufferRatio: 18.7,
     riskLevel: "Low",
   },
@@ -66,7 +66,7 @@ export default function VaultListPage() {
         transition={{ duration: 0.5, delay: 0.1 }}
         className="grid grid-cols-1 sm:grid-cols-3 gap-4"
       >
-        <StatCard label="Total TVL" value="$20.7M" icon={<DollarSign className="h-4 w-4" />} />
+        <StatCard label="Total TVL" value="$28.5M" icon={<DollarSign className="h-4 w-4" />} />
         <StatCard label="Avg APY (7d)" value="7.30%" variant="primary" icon={<TrendingUp className="h-4 w-4" />} subValue="+0.15%" trend="up" />
         <StatCard label="Active Vaults" value="2" icon={<Users className="h-4 w-4" />} />
       </motion.div>
