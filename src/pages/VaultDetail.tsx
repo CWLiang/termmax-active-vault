@@ -174,11 +174,33 @@ function FactsheetSection() {
             <TableCell className="text-foreground text-sm py-2.5 px-0">{VAULT_DATA.redemptionTimeline}</TableCell>
           </TableRow>
           <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Management Fee</TableCell>
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="flex items-center gap-1 cursor-help border-b border-dashed border-muted-foreground/40">
+                    Management Fee <Info className="h-3 w-3" />
+                  </TooltipTrigger>
+                  <TooltipContent className="text-xs max-w-xs">
+                    Fee charged by TermMax to maintain the platform
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableCell>
             <TableCell className="text-foreground text-sm font-mono py-2.5 px-0">{VAULT_DATA.managementFee}%</TableCell>
           </TableRow>
           <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Performance Fee</TableCell>
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="flex items-center gap-1 cursor-help border-b border-dashed border-muted-foreground/40">
+                    Performance Fee <Info className="h-3 w-3" />
+                  </TooltipTrigger>
+                  <TooltipContent className="text-xs max-w-xs">
+                    Fee charged by curator to execute the strategy
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableCell>
             <TableCell className="text-foreground text-sm font-mono py-2.5 px-0">{VAULT_DATA.performanceFee}%</TableCell>
           </TableRow>
           <TableRow className="border-border">
@@ -190,7 +212,30 @@ function FactsheetSection() {
           </TableRow>
           <TableRow className="border-border">
             <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Auditor</TableCell>
-            <TableCell className="text-foreground text-sm py-2.5 px-0">{VAULT_DATA.auditor}</TableCell>
+            <TableCell className="text-sm py-2.5 px-0">
+              <a href={VAULT_DATA.auditUrl} target="_blank" rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1">
+                {VAULT_DATA.auditor} <ExternalLink className="h-3 w-3" />
+              </a>
+            </TableCell>
+          </TableRow>
+          <TableRow className="border-border">
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Bug Bounty</TableCell>
+            <TableCell className="text-sm py-2.5 px-0">
+              <a href={VAULT_DATA.bugBountyUrl} target="_blank" rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1">
+                <Bug className="h-3 w-3" /> {VAULT_DATA.bugBounty} <ExternalLink className="h-3 w-3" />
+              </a>
+            </TableCell>
+          </TableRow>
+          <TableRow className="border-border">
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">DeFi Safety</TableCell>
+            <TableCell className="text-sm py-2.5 px-0">
+              <a href={VAULT_DATA.defiSafetyUrl} target="_blank" rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1">
+                <ShieldCheck className="h-3 w-3" /> Score: {VAULT_DATA.defiSafetyScore}% <ExternalLink className="h-3 w-3" />
+              </a>
+            </TableCell>
           </TableRow>
           <TableRow className="border-border">
             <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Inception</TableCell>
