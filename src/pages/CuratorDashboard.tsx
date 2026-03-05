@@ -15,13 +15,14 @@ const ASSETS = {
     { name: "OUSG (Ondo)", value: 5_200_000, yield: 4.8, allocation: 41.6 },
     { name: "DigiFT T-Bill", value: 2_100_000, yield: 5.1, allocation: 16.8 },
   ],
-  termMaxFT: [
-    { id: 1, collateral: "OUSG", principal: 400_000, rate: 4.2, maturity: "2026-06-15", ltv: 65, liqThreshold: 85, allocation: 3.2 },
-    { id: 2, collateral: "OUSG", principal: 350_000, rate: 3.95, maturity: "2026-09-15", ltv: 58, liqThreshold: 85, allocation: 2.8 },
-    { id: 3, collateral: "DigiFT", principal: 250_000, rate: 4.5, maturity: "2026-04-30", ltv: 72, liqThreshold: 80, allocation: 2.0 },
-  ],
-  cash: { value: 4_200_000, allocation: 33.6 },
+  instantLiquidity: { value: 4_200_000, allocation: 33.6 },
 };
+
+const LOANS = [
+  { id: 1, collateral: "OUSG", principal: 400_000, rate: 4.2, maturity: "2026-06-15", ltv: 65, liqThreshold: 85 },
+  { id: 2, collateral: "OUSG", principal: 350_000, rate: 3.95, maturity: "2026-09-15", ltv: 58, liqThreshold: 85 },
+  { id: 3, collateral: "DigiFT", principal: 250_000, rate: 4.5, maturity: "2026-04-30", ltv: 72, liqThreshold: 80 },
+];
 
 const LIABILITIES = {
   depositorShares: { value: 12_150_000, sharePrice: 1.0234 },
