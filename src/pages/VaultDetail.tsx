@@ -18,8 +18,8 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 const VAULT_DATA = {
   name: "RWA Enhanced Yield",
   curator: "Keyrock Capital",
-  strategy: "RWA collateral + fixed-rate leverage on TermMax",
-  strategyDetail: "This vault purchases OUSG (Ondo US Government Bond) tokens using deposited USDC. The RWA tokens are then collateralized on TermMax to borrow USDC at a fixed interest rate, which is locked at the time of entry. The borrowed USDC is redeployed into additional RWA purchases, creating a leverage loop that amplifies the base yield while keeping borrowing costs certain.",
+  strategy: "Leveraged RWA yield via DigiFT tokens, multi-protocol DeFi lending, and fixed-rate positions on TermMax & Pendle",
+  strategyDetail: "This vault deploys deposited USDC across a diversified portfolio. The core allocation (54%) is in RWA tokens — bEQTY and iSNR via DigiFT — providing institutional-grade fixed-income exposure. To amplify returns, the vault borrows USDC from AAVE (variable rate) and TermMax (fixed rate), creating a leverage loop on the RWA positions. Additional yield is generated through USDC supply on Morpho, fixed-rate FT positions on TermMax, and PT-sUSDe on Pendle. A 15% USDC buffer is maintained in the vault for instant withdrawal liquidity. All borrowing costs are optimized by blending variable (AAVE) and fixed-rate (TermMax GT) sources.",
   apy7d: 8.42,
   apy30d: 7.95,
   apy90d: 8.12,
