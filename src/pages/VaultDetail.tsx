@@ -794,44 +794,6 @@ export default function VaultDetailPage() {
             </div>
           </div>
 
-          {/* Contract Info */}
-          <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-            <h3 className="font-display font-semibold text-foreground text-sm">Contracts</h3>
-            <div className="space-y-2">
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-muted-foreground">Vault</span>
-                <div className="flex items-center gap-1.5">
-                  <button onClick={() => copyToClipboard(VAULT_DATA.contractAddress)}
-                    className="text-muted-foreground hover:text-foreground transition-colors">
-                    <Copy className="h-3 w-3" />
-                  </button>
-                  <a href={`https://etherscan.io/address/${VAULT_DATA.contractAddress}`} target="_blank" rel="noopener noreferrer"
-                    className="font-mono text-primary hover:underline inline-flex items-center gap-1">
-                    {truncateAddress(VAULT_DATA.contractAddress)} <ExternalLink className="h-3 w-3" />
-                  </a>
-                </div>
-              </div>
-              <div className="flex justify-between items-center text-xs">
-                <span className="text-muted-foreground">Strategy</span>
-                <div className="flex items-center gap-1.5">
-                  <button onClick={() => copyToClipboard(VAULT_DATA.strategyContract)}
-                    className="text-muted-foreground hover:text-foreground transition-colors">
-                    <Copy className="h-3 w-3" />
-                  </button>
-                  <a href={`https://etherscan.io/address/${VAULT_DATA.strategyContract}`} target="_blank" rel="noopener noreferrer"
-                    className="font-mono text-primary hover:underline inline-flex items-center gap-1">
-                    {truncateAddress(VAULT_DATA.strategyContract)} <ExternalLink className="h-3 w-3" />
-                  </a>
-                </div>
-              </div>
-            </div>
-            <div className="text-xs text-muted-foreground flex items-center gap-1 pt-1">
-              <Shield className="h-3 w-3 text-buffer-safe" /> Audited by{" "}
-              <a href={VAULT_DATA.auditUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                {VAULT_DATA.auditor}
-              </a>
-            </div>
-          </div>
         </motion.div>
       </div>
 
