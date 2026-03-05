@@ -601,7 +601,19 @@ export default function VaultDetailPage() {
 
           {/* TVL Stat */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <StatCard label="TVL" value={formatUSD(VAULT_DATA.tvl)} />
+            <div className="rounded-lg border border-border bg-card p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">TVL</span>
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-display font-bold text-foreground">{formatUSD(VAULT_DATA.tvl)}</span>
+                </div>
+                <div className="text-xs text-muted-foreground font-mono">
+                  {(VAULT_DATA.tvl / 1e6).toFixed(2)}M USDC
+                </div>
+              </div>
+            </div>
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Vault Capacity</span>
