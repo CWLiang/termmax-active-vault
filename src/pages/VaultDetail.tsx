@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   TrendingUp, Shield, Clock, ChevronDown, ChevronUp, ArrowDownToLine, ArrowUpFromLine,
-  PieChart as PieChartIcon, Activity, ExternalLink, Info, FileText, Lock, Copy
+  PieChart as PieChartIcon, Activity, ExternalLink, Info, FileText, Lock, Copy, Bug, ShieldCheck
 } from "lucide-react";
+import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid } from "recharts";
