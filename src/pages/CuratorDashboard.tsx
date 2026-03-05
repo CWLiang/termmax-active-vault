@@ -30,7 +30,7 @@ export default function CuratorDashboard() {
     <div className="p-6 space-y-6">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-display font-bold text-foreground">
-          Curator <span className="text-gradient-primary">Command Center</span>
+          Curator <span className="text-gradient-primary">Console</span>
         </h1>
         <p className="text-sm text-muted-foreground mt-1">RWA Enhanced Yield Vault — Keyrock Capital</p>
       </motion.div>
