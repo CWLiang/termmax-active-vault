@@ -834,6 +834,13 @@ export default function VaultDetailPage() {
           </div>
         </motion.div>
       </div>
+
+      {/* Risk Disclaimer */}
+      <div className="mt-8 mb-2 text-center">
+        <p className="text-[10px] text-muted-foreground/50 font-mono leading-relaxed max-w-2xl mx-auto">
+          Risk Disclaimer — Investing in Midas-issued tokens involves risk, including potential loss of principal. Please review all relevant documentation before proceeding.
+        </p>
+      </div>
     </div>
   );
 }
