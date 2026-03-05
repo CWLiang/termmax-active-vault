@@ -260,9 +260,9 @@ function PortfolioSection() {
           </a>
         )}
       </div>
-      <div className="flex items-center gap-4">
-        <span className="font-mono text-sm text-foreground w-10 text-right">{item.value}%</span>
-        <span className="font-mono text-xs text-muted-foreground w-16 text-right">{formatUSD(item.amount)}</span>
+      <div className="flex items-center">
+        <span className="font-mono text-xs text-foreground w-12 text-right">{item.value}%</span>
+        <span className="font-mono text-xs text-muted-foreground w-20 text-right">{formatUSD(item.amount)}</span>
       </div>
     </div>
   );
@@ -274,7 +274,10 @@ function PortfolioSection() {
         <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
         <RateTypeBadge type={item.rateType} />
       </div>
-      <span className="font-mono text-sm text-foreground">{formatUSD(item.amount)}</span>
+      <div className="flex items-center">
+        <span className="w-12"></span>
+        <span className="font-mono text-xs text-foreground w-20 text-right">{formatUSD(item.amount)}</span>
+      </div>
     </div>
   );
 
@@ -343,9 +346,10 @@ function PortfolioSection() {
                     <span className="w-3 h-3 rounded" style={{ background: catColor }} />
                     {meta.label}
                   </span>
-                  <span className="text-xs font-mono font-semibold text-foreground">{catTotal}%
-                    <span className="text-muted-foreground font-normal ml-1.5">{formatUSD(catAmount)}</span>
-                  </span>
+                  <div className="flex items-center">
+                    <span className="font-mono text-xs font-semibold text-foreground w-12 text-right">{catTotal}%</span>
+                    <span className="font-mono text-xs text-muted-foreground w-20 text-right">{formatUSD(catAmount)}</span>
+                  </div>
                 </div>
                 <div className="pl-5">
                   <CollapsibleItems items={items} renderItem={renderAssetItem} />
@@ -361,9 +365,12 @@ function PortfolioSection() {
                 <span className="w-3 h-3 rounded" style={{ background: loanColor }} />
                 Loans (Liabilities)
               </span>
-              <span className="text-xs font-mono font-semibold" style={{ color: loanColor }}>
-                {formatUSD(totalLoans)}
-              </span>
+              <div className="flex items-center">
+                <span className="w-12"></span>
+                <span className="font-mono text-xs font-semibold w-20 text-right" style={{ color: loanColor }}>
+                  {formatUSD(totalLoans)}
+                </span>
+              </div>
             </div>
             <div className="pl-5">
               <CollapsibleItems items={LOAN_DATA} renderItem={renderLoanItem} />
