@@ -343,9 +343,10 @@ function PortfolioSection() {
                     <span className="w-3 h-3 rounded" style={{ background: catColor }} />
                     {meta.label}
                   </span>
-                  <span className="text-xs font-mono font-semibold text-foreground">{catTotal}%
-                    <span className="text-muted-foreground font-normal ml-1.5">{formatUSD(catAmount)}</span>
-                  </span>
+                  <div className="flex items-center">
+                    <span className="font-mono text-xs font-semibold text-foreground w-12 text-right">{catTotal}%</span>
+                    <span className="font-mono text-xs text-muted-foreground w-20 text-right">{formatUSD(catAmount)}</span>
+                  </div>
                 </div>
                 <div className="pl-5">
                   <CollapsibleItems items={items} renderItem={renderAssetItem} />
