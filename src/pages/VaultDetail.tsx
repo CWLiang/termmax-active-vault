@@ -79,6 +79,7 @@ interface AllocationItem {
   value: number;
   amount: number;
   color: string;
+  externalUrl?: string;
 }
 
 const CATEGORY_COLORS: Record<AllocationCategory, string> = {
@@ -89,8 +90,8 @@ const CATEGORY_COLORS: Record<AllocationCategory, string> = {
 };
 
 const ALLOCATION_DATA: AllocationItem[] = [
-  { name: "bEQTY", protocol: "DigiFT", category: "RWA", rateType: null, value: 32, amount: 4000000, color: CATEGORY_COLORS.RWA },
-  { name: "iSNR", protocol: "DigiFT", category: "RWA", rateType: null, value: 22, amount: 2750000, color: CATEGORY_COLORS.RWA },
+  { name: "bEQTY", protocol: "DigiFT", category: "RWA", rateType: null, value: 32, amount: 4000000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=bEQTY" },
+  { name: "iSNR", protocol: "DigiFT", category: "RWA", rateType: null, value: 22, amount: 2750000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=iSNR" },
   { name: "USDC Supply", protocol: "Morpho", category: "Yield", rateType: "variable", value: 8, amount: 1000000, color: CATEGORY_COLORS.Yield },
   { name: "FT-USDC-Jun26", protocol: "TermMax", category: "Yield", rateType: "fixed", value: 10, amount: 1250000, color: CATEGORY_COLORS.Yield },
   { name: "PT-sUSDe-Mar26", protocol: "Pendle", category: "Yield", rateType: "fixed", value: 6, amount: 750000, color: CATEGORY_COLORS.Yield },
@@ -252,6 +253,12 @@ function PortfolioSection() {
         <span className="text-sm text-foreground">{item.name}</span>
         <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
         <RateTypeBadge type={item.rateType} />
+        {item.externalUrl && (
+          <a href={item.externalUrl} target="_blank" rel="noopener noreferrer"
+            className="text-muted-foreground hover:text-primary transition-colors">
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
       </div>
       <div className="flex items-center gap-4">
         <span className="font-mono text-sm text-foreground w-10 text-right">{item.value}%</span>
