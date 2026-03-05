@@ -30,14 +30,16 @@ const LIABILITIES = {
   accruedFees: { management: 12_500, performance: 37_500 },
 };
 
+const totalLoans = LOANS.reduce((s, l) => s + l.principal, 0);
+
 const totalAssets = ASSETS.rwa.reduce((s, r) => s + r.value, 0)
-  + ASSETS.termMaxFT.reduce((s, f) => s + f.principal, 0)
-  + ASSETS.cash.value;
+  + ASSETS.instantLiquidity.value;
 
 const totalLiabilities = LIABILITIES.depositorShares.value
   + LIABILITIES.pendingWithdrawals.value
   + LIABILITIES.accruedFees.management
-  + LIABILITIES.accruedFees.performance;
+  + LIABILITIES.accruedFees.performance
+  + totalLoans;
 
 const netEquity = totalAssets - totalLiabilities;
 
@@ -55,7 +57,7 @@ function formatUSD(v: number) {
 
 /* ─── T-Account Balance Sheet ─── */
 function BalanceSheet() {
-  const hasLTVWarning = ASSETS.termMaxFT.some(p => p.ltv / p.liqThreshold > 0.8);
+  const hasLTVWarning = LOANS.some(p => p.ltv / p.liqThreshold > 0.8);
 
   return (
     <div className="space-y-4">
@@ -120,54 +122,17 @@ function BalanceSheet() {
             </div>
           </div>
 
-          {/* TermMax FT Positions */}
-          <div className="px-5 py-3 border-b border-border/50">
-            <div className="flex items-center gap-2 mb-2">
-              <Shield className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">TermMax FT Positions</span>
-            </div>
-            {ASSETS.termMaxFT.map((ft) => (
-              <div key={ft.id} className="py-2 border-b border-border/20 last:border-0">
-                <div className="flex items-center justify-between text-sm mb-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-foreground">{ft.collateral}</span>
-                    <span className="text-xs text-muted-foreground">#{ft.id}</span>
-                    <span className="text-xs font-mono text-primary">{ft.rate}%</span>
-                  </div>
-                  <span className="font-mono text-foreground text-sm">{formatUSD(ft.principal)}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Gauge
-                    value={ft.ltv}
-                    max={ft.liqThreshold}
-                    label={`LTV ${ft.ltv}% / Liq ${ft.liqThreshold}%`}
-                    thresholds={{ warning: 75, danger: 90 }}
-                    className="flex-1"
-                    showPercentage={false}
-                  />
-                  <span className="text-xs font-mono text-muted-foreground flex items-center gap-1">
-                    <Clock className="h-3 w-3" />{ft.maturity}
-                  </span>
-                </div>
-              </div>
-            ))}
-            <div className="flex justify-between pt-1.5 border-t border-border/30 text-xs text-muted-foreground font-mono">
-              <span>Subtotal</span>
-              <span>{formatUSD(ASSETS.termMaxFT.reduce((s, f) => s + f.principal, 0))}</span>
-            </div>
-          </div>
-
-          {/* Cash */}
+          {/* Instant Liquidity */}
           <div className="px-5 py-3">
             <div className="flex items-center gap-2 mb-2">
               <DollarSign className="h-3.5 w-3.5 text-buffer-safe" />
-              <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Cash Buffer</span>
+              <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Instant Liquidity</span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="font-mono text-foreground">USDC</span>
               <div className="text-right">
-                <span className="font-mono text-foreground">{formatUSD(ASSETS.cash.value)}</span>
-                <span className="text-xs text-buffer-safe ml-2">{ASSETS.cash.allocation}%</span>
+                <span className="font-mono text-foreground">{formatUSD(ASSETS.instantLiquidity.value)}</span>
+                <span className="text-xs text-buffer-safe ml-2">{ASSETS.instantLiquidity.allocation}%</span>
               </div>
             </div>
           </div>
