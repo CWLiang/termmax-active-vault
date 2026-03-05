@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import {
   DollarSign, TrendingUp, Shield, Clock,
   Landmark, Wallet, BarChart3, Users, Award, AlertTriangle,
-  Banknote, Lock, Timer,
+  Banknote, Lock, Timer, CheckCircle2, Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +27,18 @@ interface FRTPosition {
   purchaseDate: string;
   maturityDate: string;
   impliedYield: number;
+}
+
+interface LendingPosition {
+  protocol: string;
+  asset: string;
+  receiptToken: string;
+  principal: number;
+  currentValue: number;
+  apy: number;
+  rateType: "floating" | "fixed";
+  depositDate: string;
+  withdrawable: boolean;
 }
 
 interface BorrowPosition {
@@ -58,6 +70,7 @@ interface VaultBalanceSheetProps {
   cash: number;
   rwaPositions: RWAPosition[];
   frtPositions: FRTPosition[];
+  lendingPositions: LendingPosition[];
   borrowPositions: BorrowPosition[];
   fees: FeeStructure;
   shares: ShareAccounting;
@@ -116,7 +129,9 @@ function assetTypeBadge(t: "equity_fund" | "private_credit") {
 
 function protocolBadge(p: string) {
   if (p === "TermMax") return "bg-primary/15 text-primary border-primary/30";
-  if (p === "Pendle") return "bg-purple-500/20 text-purple-400 border-purple-500/30";
+  if (p === "Pendle") return "bg-indigo-500/20 text-indigo-400 border-indigo-500/30";
+  if (p === "Aave") return "bg-violet-500/20 text-violet-400 border-violet-500/30";
+  if (p === "Morpho") return "bg-purple-500/20 text-purple-400 border-purple-500/30";
   return "bg-secondary text-muted-foreground border-border";
 }
 
@@ -129,14 +144,15 @@ function computeAmortizedValue(frt: FRTPosition, today: string) {
 
 /* ─── Component ─── */
 export function VaultBalanceSheet({
-  cash, rwaPositions, frtPositions, borrowPositions, fees, shares, daysSinceInception = 64, today = "2025-03-05",
+  cash, rwaPositions, frtPositions, lendingPositions, borrowPositions, fees, shares, daysSinceInception = 64, today = "2025-03-05",
 }: VaultBalanceSheetProps) {
   const totalRWA = rwaPositions.reduce((s, r) => s + r.currentValue, 0);
   const frtAmortized = frtPositions.map(f => ({ ...f, amortizedValue: computeAmortizedValue(f, today) }));
   const totalFRT_AC = frtAmortized.reduce((s, f) => s + f.amortizedValue, 0);
   const totalFRT_MTM = frtPositions.reduce((s, f) => s + f.currentPrice, 0);
-  const totalAssets_AC = cash + totalRWA + totalFRT_AC;
-  const totalAssets_MTM = cash + totalRWA + totalFRT_MTM;
+  const totalLending = lendingPositions.reduce((s, l) => s + l.currentValue, 0);
+  const totalAssets_AC = cash + totalRWA + totalFRT_AC + totalLending;
+  const totalAssets_MTM = cash + totalRWA + totalFRT_MTM + totalLending;
 
   const totalBorrows = borrowPositions.reduce((s, b) => s + b.borrowedUSDC, 0);
   const totalAccruedFees = fees.accruedManagementFee + fees.accruedPerformanceFee;
@@ -153,7 +169,8 @@ export function VaultBalanceSheet({
     const totalDays = daysBetween(f.purchaseDate, f.maturityDate);
     return s + (totalDays > 0 ? (f.faceValue - f.purchasePrice) / totalDays : 0);
   }, 0);
-  const dailyYield = dailyYield_RWA + dailyYield_FRT;
+  const dailyYield_Lending = lendingPositions.reduce((s, l) => s + (l.currentValue * l.apy) / 365, 0);
+  const dailyYield = dailyYield_RWA + dailyYield_FRT + dailyYield_Lending;
   const dailyCost = borrowPositions.reduce((s, b) => s + (b.borrowedUSDC * b.fixedRate) / 365, 0);
   const netSpread = dailyYield - dailyCost;
   const dailyMgmtFee = (totalAssets_AC * fees.managementFeeRate) / 365;
@@ -199,7 +216,7 @@ export function VaultBalanceSheet({
             <span className="font-display font-semibold text-sm text-foreground uppercase tracking-wider">Assets</span>
           </div>
 
-          {/* Cash */}
+          {/* [1] Cash */}
           <div className="px-5 py-4 border-b border-border/50">
             <div className="flex items-center gap-2 mb-2">
               <DollarSign className="h-3.5 w-3.5 text-buffer-safe" />
@@ -208,13 +225,70 @@ export function VaultBalanceSheet({
             <div className="flex items-center justify-between text-sm">
               <div>
                 <span className="font-mono text-foreground">USDC Buffer</span>
-                <div className="text-[11px] text-muted-foreground font-mono mt-0.5">Instant Liquidity (~5% TVL)</div>
+                <div className="text-[11px] text-muted-foreground font-mono mt-0.5">Minimal buffer · gas + instant redemptions</div>
               </div>
               <span className="font-mono text-foreground font-semibold">{fmtFull(cash)}</span>
             </div>
           </div>
 
-          {/* RWA Positions */}
+          {/* [2] Lending Positions */}
+          {lendingPositions.length > 0 && (
+            <div className="px-5 py-4 border-b border-border/50">
+              <div className="flex items-center gap-2 mb-1">
+                <Waves className="h-3.5 w-3.5 text-violet-400" />
+                <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Yield-Bearing Liquidity</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground/60 font-mono mb-3">Withdrawable on demand · floating rate</div>
+              {lendingPositions.map((l, i) => {
+                const dailyY = (l.currentValue * l.apy) / 365;
+                return (
+                  <div key={i} className="py-3 border-b border-border/20 last:border-0">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full border font-mono", protocolBadge(l.protocol))}>{l.protocol}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 text-emerald-400 font-mono">{l.asset}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/15 text-amber-400 font-mono">
+                        ~{l.rateType}
+                      </span>
+                    </div>
+                    <div className="space-y-1 mt-2">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground font-mono">Receipt Token</span>
+                        <span className="font-mono text-muted-foreground">{l.receiptToken}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground font-mono">Principal</span>
+                        <span className="font-mono text-muted-foreground">{fmtFull(l.principal)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground font-mono">Current Value</span>
+                        <span className="font-mono text-foreground font-semibold">{fmtFull(l.currentValue)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground font-mono">APY</span>
+                        <span className="font-mono text-primary">~{pctShort(l.apy)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground font-mono">Daily Yield</span>
+                        <span className="font-mono text-yield-positive">{fmtFull(dailyY)}/day</span>
+                      </div>
+                      {l.withdrawable && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                          <span className="text-[10px] font-mono text-emerald-400">Withdrawable</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="flex justify-between pt-2 text-xs text-muted-foreground font-mono">
+                <span>Lending Subtotal</span>
+                <span>{fmtFull(totalLending)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* [3] RWA Positions */}
           <div className="px-5 py-4 border-b border-border/50">
             <div className="flex items-center gap-2 mb-3">
               <Landmark className="h-3.5 w-3.5 text-accent" />
@@ -267,7 +341,7 @@ export function VaultBalanceSheet({
             </div>
           </div>
 
-          {/* Fixed Rate Token Positions */}
+          {/* [4] Fixed Rate Token Positions */}
           <div className="px-5 py-4 border-b border-border/50 flex-1">
             <div className="flex items-center gap-2 mb-3">
               <Timer className="h-3.5 w-3.5 text-amber-400" />
@@ -553,13 +627,18 @@ export function VaultBalanceSheet({
               </span>
             );
           })}
+          {lendingPositions.map(l => (
+            <span key={l.receiptToken} className="text-[11px] font-mono text-muted-foreground">
+              {l.protocol} {fmtFull((l.currentValue * l.apy) / 365)}/day
+            </span>
+          ))}
         </div>
         <div className="px-5 py-2.5 border-t border-border/50 flex flex-wrap gap-x-8 gap-y-1.5 justify-center">
           <span className="text-[11px] font-mono text-muted-foreground">
-            Management: {pctShort(fees.managementFeeRate)}/yr of AUM → ~{fmtFull(dailyMgmtFee)}/day accruing
+            Mgmt: {pctShort(fees.managementFeeRate)}/yr · ~{fmtFull(dailyMgmtFee)}/day accruing
           </span>
           <span className="text-[11px] font-mono text-muted-foreground">
-            Performance: {pctShort(fees.performanceFeeRate)} of profits above HWM → accruing
+            Perf: {pctShort(fees.performanceFeeRate)} above HWM · accruing
           </span>
         </div>
       </motion.div>
