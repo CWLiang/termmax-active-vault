@@ -503,19 +503,13 @@ function WithdrawPanel() {
               <span className="text-[10px] text-muted-foreground font-mono">Balance: {userBalance.toLocaleString()} USDC</span>
             </div>
           </div>
-           <div className="p-3 rounded-lg bg-secondary/50 border border-border">
-             <div className="flex justify-between text-xs">
-               <span className="text-muted-foreground">Instant Withdrawable</span>
-               <span className="text-buffer-safe font-mono">{(VAULT_DATA.bufferAmount / 1e6).toFixed(2)}M USDC</span>
-             </div>
-           </div>
-          {exceedsBuffer && parsedAmount > 0 && (
+           {exceedsBuffer && parsedAmount > 0 && (
             <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-lg bg-buffer-warning/10 border border-buffer-warning/30 space-y-2">
               <p className="text-xs text-buffer-warning">
-                ⚠ Requested amount exceeds the cash buffer. You can withdraw up to {formatUSD(VAULT_DATA.bufferAmount)} instantly.
+                ⚠ Exceeds instant withdrawable ({(VAULT_DATA.bufferAmount / 1e6).toFixed(2)}M USDC). Up to that amount can be withdrawn instantly.
               </p>
               <p className="text-xs text-muted-foreground">
-                The remaining {formatUSD(parsedAmount - VAULT_DATA.bufferAmount)} will be queued and processed when the Curator replenishes the buffer.
+                The remaining {formatUSD(parsedAmount - VAULT_DATA.bufferAmount)} will be queued and processed when the Curator replenishes liquidity.
               </p>
             </motion.div>
           )}
