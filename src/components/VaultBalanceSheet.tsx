@@ -149,12 +149,14 @@ function CollapsibleSection({
   title,
   subtotal,
   defaultOpen = false,
+  summaryItems,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
   subtotal: string;
   defaultOpen?: boolean;
+  summaryItems?: { name: string; value: string }[];
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -171,6 +173,17 @@ function CollapsibleSection({
         </div>
         <span className="font-mono text-foreground font-semibold text-sm">{subtotal}</span>
       </button>
+      {/* Collapsed summary: show each item name + value */}
+      {!open && summaryItems && summaryItems.length > 0 && (
+        <div className="px-5 pb-2.5 -mt-1 space-y-0.5">
+          {summaryItems.map((item, i) => (
+            <div key={i} className="flex items-center justify-between text-xs">
+              <span className="font-mono text-muted-foreground">{item.name}</span>
+              <span className="font-mono text-muted-foreground">{item.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
