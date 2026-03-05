@@ -20,6 +20,20 @@ const VAULT_BORROWS = [
   { id: "GT-2", collateralToken: "OUSG", collateralAmount: 60, borrowedUSDC: 36, fixedRate: 0.03, maturityDate: "2025-06-01" },
 ];
 
+const VAULT_FEES = {
+  managementFeeRate: 0.02,
+  performanceFeeRate: 0.20,
+  highWaterMark: 1.0200,
+  accruedManagementFee: 0.88,
+  accruedPerformanceFee: 0.52,
+};
+
+const VAULT_SHARES = {
+  totalSharesOutstanding: 60,
+  lpInvestedCapital: 60,
+  accumulatedEarnings: 3.60,
+};
+
 function formatUSD(v: number) {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
   if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
