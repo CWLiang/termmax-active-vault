@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { VaultBalanceSheet } from "@/components/VaultBalanceSheet";
 
-/* ─── Example Data ($20M TVL Vault) ─── */
+/* ─── Example Data — $20M TVL Vault, 64 days since inception (2025-01-01 → 2025-03-05) ─── */
 const VAULT_CASH = 1_570_000;
 
 const VAULT_RWA = [
@@ -16,7 +16,8 @@ const VAULT_RWA = [
     managedBy: "BNY",
     platform: "DigiFT",
     assetType: "equity_fund" as const,
-    currentValue: 18_840_000,
+    costBasis: 18_840_000,
+    currentValue: 19_322_000,
     yieldRate: 0.065,
   },
   {
@@ -24,6 +25,7 @@ const VAULT_RWA = [
     managedBy: "Invesco",
     platform: "DigiFT",
     assetType: "private_credit" as const,
+    costBasis: 10_990_000,
     currentValue: 10_990_000,
     yieldRate: 0.07,
   },
@@ -33,11 +35,11 @@ const VAULT_BORROWS = [
   {
     id: "GT-1",
     collateralToken: "bEQTY",
-    collateralValue: 18_840_000,
+    collateralValue: 19_322_000,
     borrowedUSDC: 7_200_000,
     fixedRate: 0.04,
     maturityDate: "2025-06-03",
-    currentLTV: 0.382,
+    currentLTV: 0.373,
   },
   {
     id: "GT-2",
@@ -52,16 +54,17 @@ const VAULT_BORROWS = [
 
 const VAULT_FEES = {
   managementFeeRate: 0.02,
-  performanceFeeRate: 0.20,
+  performanceFeeRate: 0.10,
   highWaterMark: 1.00,
-  accruedManagementFee: 0,
-  accruedPerformanceFee: 0,
+  accruedManagementFee: 110_144,
+  accruedPerformanceFee: 75_157,
 };
 
 const VAULT_SHARES = {
   totalSharesOutstanding: 20_000_000,
   lpInvestedCapital: 20_000_000,
-  navPerShare: 1.00,
+  accumulatedEarnings: 751_568,
+  navPerShare: 1.0148,
 };
 
 export default function CuratorDashboard() {
@@ -83,6 +86,7 @@ export default function CuratorDashboard() {
             borrowPositions={VAULT_BORROWS}
             fees={VAULT_FEES}
             shares={VAULT_SHARES}
+            daysSinceInception={64}
           />
         </motion.div>
 
@@ -119,7 +123,7 @@ export default function CuratorDashboard() {
                 <input type="number" placeholder="Collateral Amount" className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground" />
                 <div className="p-3 rounded-lg bg-secondary/50 border border-border space-y-1.5 text-xs">
                   <div className="flex justify-between"><span className="text-muted-foreground">Fixed Rate</span><span className="text-primary font-mono">4.00%</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Est. LTV</span><span className="text-foreground font-mono">38.2%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Est. LTV</span><span className="text-foreground font-mono">37.3%</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">Maturity</span><span className="text-foreground font-mono">2025-09-03</span></div>
                 </div>
                 <Button className="w-full"><Activity className="h-4 w-4" />Open Position</Button>
