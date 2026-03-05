@@ -10,12 +10,12 @@ const MOCK_VAULTS = [
     id: "vault-1",
     name: "RWA Enhanced Yield",
     curator: "Keyrock Capital",
-    strategy: "RWA collateral + fixed-rate leverage on TermMax",
-    apy7d: 8.42,
-    apy30d: 7.95,
-    tvl: 20_296_699,
+    strategy: "RWA collateral + fixed-rate leverage on TermMax + satellite FT/PT positions",
+    apy7d: 9.8,
+    apy30d: 9.5,
+    tvl: 24_796_699,
     capacity: 50_000_000,
-    bufferRatio: 4.9,
+    bufferRatio: 4.6,
     riskLevel: "Medium",
   },
   {
@@ -40,6 +40,7 @@ function formatUSD(value: number) {
 
 export default function VaultListPage() {
   const navigate = useNavigate();
+  const totalTVL = MOCK_VAULTS.reduce((s, v) => s + v.tvl, 0);
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
@@ -66,8 +67,8 @@ export default function VaultListPage() {
         transition={{ duration: 0.5, delay: 0.1 }}
         className="grid grid-cols-1 sm:grid-cols-3 gap-4"
       >
-        <StatCard label="Total TVL" value="$28.5M" icon={<DollarSign className="h-4 w-4" />} />
-        <StatCard label="Avg APY (7d)" value="7.30%" variant="primary" icon={<TrendingUp className="h-4 w-4" />} subValue="+0.15%" trend="up" />
+        <StatCard label="Total TVL" value={formatUSD(totalTVL)} icon={<DollarSign className="h-4 w-4" />} />
+        <StatCard label="Avg APY (7d)" value="7.99%" variant="primary" icon={<TrendingUp className="h-4 w-4" />} subValue="+0.22%" trend="up" />
         <StatCard label="Active Vaults" value="2" icon={<Users className="h-4 w-4" />} />
       </motion.div>
 
@@ -100,7 +101,7 @@ export default function VaultListPage() {
                     <span className="font-mono">{vault.curator}</span>
                     <span className="text-border">•</span>
                     <Clock className="h-3.5 w-3.5" />
-                    <span className="font-mono">30d track record</span>
+                    <span className="font-mono">64d track record</span>
                   </div>
                 </div>
 

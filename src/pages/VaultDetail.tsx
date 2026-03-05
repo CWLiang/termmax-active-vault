@@ -19,20 +19,20 @@ import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 const VAULT_DATA = {
   name: "RWA Enhanced Yield",
   curator: "Keyrock Capital",
-  strategy: "Leveraged RWA yield via DigiFT tokens (bEQTY, iSNR) and fixed-rate borrowing on TermMax to amplify returns",
-  strategyDetail: "This vault deploys deposited USDC into institutional-grade RWA tokens — bEQTY (BNY equity fund) and iSNR (Invesco private credit) — via DigiFT. To amplify returns, the vault collateralizes RWA tokens on TermMax to borrow USDC at locked fixed rates (4%), then reinvests borrowed USDC into additional RWA tokens (leverage loop). A ~5% USDC buffer is maintained for instant withdrawal liquidity. Net yield = RWA yield (6.5–7%) minus borrowing cost (4%), amplified by 1.57x leverage.",
-  apy7d: 8.42,
-  apy30d: 7.95,
-  apy90d: 7.70,
-  tvl: 20_296_699,
+  strategy: "Leveraged RWA yield via DigiFT tokens + satellite fixed-rate positions (TermMax FT, Pendle PT) to amplify returns",
+  strategyDetail: "This vault deploys deposited USDC into institutional-grade RWA tokens — bEQTY (BNY equity fund) and iSNR (Invesco private credit) — via DigiFT. To amplify returns, the vault collateralizes RWA tokens on TermMax to borrow USDC at locked fixed rates (4%), then reinvests borrowed USDC into additional RWA tokens (leverage loop). Satellite positions in discounted Fixed Rate Tokens (TermMax FT-USDC, Pendle PT-sUSDe) provide additional fixed yield. A ~5% USDC buffer is maintained for instant withdrawal liquidity.",
+  apy7d: 9.8,
+  apy30d: 9.5,
+  apy90d: 9.5,
+  tvl: 24_796_699,
   capacity: 50_000_000,
-  bufferRatio: 4.9,
-  bufferAmount: 1_570_000,
-  nav: 1.0148,
-  navDelta24h: 0.021,
-  navDelta7d: 0.15,
-  sharePrice: 1.0148,
-  positions: { rwa: 95, cash: 5 },
+  bufferRatio: 4.6,
+  bufferAmount: 1_670_000,
+  nav: 1.0122,
+  navDelta24h: 0.028,
+  navDelta7d: 0.19,
+  sharePrice: 1.0122,
+  positions: { rwa: 83, frt: 12, cash: 5 },
   managementFee: 2.0,
   performanceFee: 10.0,
   yieldType: "Auto-compounded in NAV",
@@ -49,18 +49,18 @@ const VAULT_DATA = {
   strategyContract: "0xabcdef1234567890abcdef1234567890abcdef12",
 };
 
-// Mock NAV history — starts at $1.00, ends at ~$1.0148
+// Mock NAV history — starts at $1.00, ends at ~$1.0122
 const NAV_HISTORY_7D = Array.from({ length: 7 }, (_, i) => ({
   day: `Feb ${i + 27}`,
-  nav: +(1.011 + Math.random() * 0.003 + i * 0.0005).toFixed(4),
+  nav: +(1.009 + Math.random() * 0.003 + i * 0.0004).toFixed(4),
 }));
 const NAV_HISTORY_30D = Array.from({ length: 30 }, (_, i) => ({
   day: `Feb ${i + 1}`,
-  nav: +(1.005 + Math.random() * 0.005 + i * 0.0003).toFixed(4),
+  nav: +(1.004 + Math.random() * 0.004 + i * 0.00025).toFixed(4),
 }));
 const NAV_HISTORY_90D = Array.from({ length: 64 }, (_, i) => ({
   day: `Jan ${(i % 31) + 1}`,
-  nav: +(1.000 + Math.random() * 0.004 + i * 0.00023).toFixed(4),
+  nav: +(1.000 + Math.random() * 0.003 + i * 0.00019).toFixed(4),
 }));
 
 const NAV_DATA_MAP: Record<string, typeof NAV_HISTORY_7D> = {
@@ -75,7 +75,7 @@ const APY_MAP: Record<string, number> = {
 };
 
 type RateType = "fixed" | "variable" | null;
-type AllocationCategory = "RWA" | "Loan" | "Instant Liquidity";
+type AllocationCategory = "RWA" | "Fixed Rate" | "Loan" | "Instant Liquidity";
 
 interface AllocationItem {
   name: string;
@@ -90,27 +90,31 @@ interface AllocationItem {
 
 const CATEGORY_COLORS: Record<AllocationCategory, string> = {
   RWA: "hsl(187, 100%, 50%)",
+  "Fixed Rate": "hsl(40, 90%, 55%)",
   Loan: "hsl(0, 65%, 55%)",
   "Instant Liquidity": "hsl(160, 70%, 45%)",
 };
 
-// Percentages are of Total Assets ($31.88M gross)
+// Percentages are of Total Assets ($36.38M gross)
 const ALLOCATION_DATA: AllocationItem[] = [
-  { name: "bEQTY", protocol: "DigiFT", category: "RWA", rateType: null, value: 60.6, amount: 19_322_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=bEQTY" },
-  { name: "iSNR", protocol: "DigiFT", category: "RWA", rateType: null, value: 34.5, amount: 10_990_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=iSNR" },
-  { name: "GT-1 (bEQTY collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 22.6, amount: 7_200_000, color: CATEGORY_COLORS.Loan },
-  { name: "GT-2 (iSNR collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 13.2, amount: 4_200_000, color: CATEGORY_COLORS.Loan },
-  { name: "USDC", protocol: "Vault", category: "Instant Liquidity", rateType: null, value: 4.9, amount: 1_570_000, color: CATEGORY_COLORS["Instant Liquidity"] },
+  { name: "bEQTY", protocol: "DigiFT", category: "RWA", rateType: null, value: 53.1, amount: 19_322_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=bEQTY" },
+  { name: "iSNR", protocol: "DigiFT", category: "RWA", rateType: null, value: 30.2, amount: 10_990_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=iSNR" },
+  { name: "FT-USDC-Jun25", protocol: "TermMax", category: "Fixed Rate", rateType: "fixed", value: 6.9, amount: 2_500_000, color: CATEGORY_COLORS["Fixed Rate"] },
+  { name: "PT-sUSDe-Sep25", protocol: "Pendle", category: "Fixed Rate", rateType: "fixed", value: 5.2, amount: 1_900_000, color: CATEGORY_COLORS["Fixed Rate"] },
+  { name: "GT-1 (bEQTY collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 19.8, amount: 7_200_000, color: CATEGORY_COLORS.Loan },
+  { name: "GT-2 (iSNR collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 11.5, amount: 4_200_000, color: CATEGORY_COLORS.Loan },
+  { name: "USDC", protocol: "Vault", category: "Instant Liquidity", rateType: null, value: 4.6, amount: 1_670_000, color: CATEGORY_COLORS["Instant Liquidity"] },
 ];
 
 const CATEGORY_META: Record<AllocationCategory, { label: string }> = {
   RWA: { label: "RWA" },
+  "Fixed Rate": { label: "Fixed Rate Tokens" },
   Loan: { label: "Loan" },
   "Instant Liquidity": { label: "Instant Liquidity" },
 };
 
 // Assets only (exclude Loan) for pie chart
-const ASSET_CATEGORIES: AllocationCategory[] = ["RWA", "Instant Liquidity"];
+const ASSET_CATEGORIES: AllocationCategory[] = ["RWA", "Fixed Rate", "Instant Liquidity"];
 const LOAN_DATA = ALLOCATION_DATA.filter((d) => d.category === "Loan");
 
 const PIE_DATA = Object.entries(
@@ -125,6 +129,8 @@ const PIE_DATA = Object.entries(
 }));
 
 const MOCK_ACTIONS = [
+  { time: "1h ago", type: "Buy FT-USDC-Jun25", tx: "0xab12...cd34" },
+  { time: "1h ago", type: "Buy PT-sUSDe-Sep25", tx: "0xef56...gh78" },
   { time: "2h ago", type: "RWA Purchase", tx: "0x1a2b...3c4d" },
   { time: "6h ago", type: "Open GT Position", tx: "0x3c4d...5e6f" },
   { time: "1d ago", type: "Place Lending Order", tx: "0x5e6f...7890" },
@@ -402,7 +408,7 @@ function PortfolioSection() {
             {PIE_DATA.map((entry, i) => (
               <span key={i} className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.color }} />
-                {entry.name} {entry.value}%
+                {entry.name} {entry.value.toFixed(1)}%
               </span>
             ))}
           </div>
@@ -427,7 +433,7 @@ function PortfolioSection() {
                     {meta.label}
                   </span>
                   <div className="flex items-center">
-                    <span className="font-mono text-xs font-semibold text-foreground w-12 text-right">{catTotal}%</span>
+                    <span className="font-mono text-xs font-semibold text-foreground w-12 text-right">{catTotal.toFixed(1)}%</span>
                     <span className="font-mono text-xs text-muted-foreground w-20 text-right">{formatUSD(catAmount)}</span>
                   </div>
                 </div>
@@ -571,7 +577,7 @@ function WithdrawPanel() {
   const [amount, setAmount] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const parsedAmount = parseFloat(amount) || 0;
-  const userBalance = 5230.42; // Mock user balance in USDC
+  const userBalance = 5230.42;
   const exceedsBuffer = parsedAmount > VAULT_DATA.bufferAmount;
 
   return (
@@ -687,7 +693,7 @@ export default function VaultDetailPage() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">TVL</span>
+                <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">TVL (NAV)</span>
               </div>
               <div className="flex flex-col gap-2">
                 <div className="flex items-baseline gap-2">
@@ -728,9 +734,6 @@ export default function VaultDetailPage() {
 
           {/* 2. Portfolio — Asset Allocation */}
           <PortfolioSection />
-
-
-
 
           {/* 5. Vault Details */}
           <VaultDetailsSection />
