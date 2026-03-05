@@ -66,7 +66,7 @@ export default function VaultListPage() {
         transition={{ duration: 0.5, delay: 0.1 }}
         className="grid grid-cols-1 sm:grid-cols-3 gap-4"
       >
-        <StatCard label="Total TVL" value="$20.7M" icon={<DollarSign className="h-4 w-4" />} />
+        <StatCard label="Total TVL" value="$28.5M" icon={<DollarSign className="h-4 w-4" />} />
         <StatCard label="Avg APY (7d)" value="7.30%" variant="primary" icon={<TrendingUp className="h-4 w-4" />} subValue="+0.15%" trend="up" />
         <StatCard label="Active Vaults" value="2" icon={<Users className="h-4 w-4" />} />
       </motion.div>
