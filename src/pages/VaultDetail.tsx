@@ -274,7 +274,10 @@ function PortfolioSection() {
         <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
         <RateTypeBadge type={item.rateType} />
       </div>
-      <span className="font-mono text-sm text-foreground">{formatUSD(item.amount)}</span>
+      <div className="flex items-center">
+        <span className="w-12"></span>
+        <span className="font-mono text-xs text-foreground w-20 text-right">{formatUSD(item.amount)}</span>
+      </div>
     </div>
   );
 
