@@ -2,43 +2,68 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  DollarSign, AlertTriangle, Activity,
+  AlertTriangle, Activity,
   Coins, ArrowDownToLine, ArrowUpFromLine, Zap, Pause,
 } from "lucide-react";
 import { VaultBalanceSheet } from "@/components/VaultBalanceSheet";
 
-/* ─── Example Data ─── */
-const VAULT_CASH = 0;
+/* ─── Example Data ($20M TVL Vault) ─── */
+const VAULT_CASH = 1_570_000;
 
 const VAULT_RWA = [
-  { token: "OUSG", amount: 100, yieldRate: 0.05 },
-  { token: "OUSG", amount: 60, yieldRate: 0.05 },
+  {
+    token: "bEQTY",
+    managedBy: "BNY",
+    platform: "DigiFT",
+    assetType: "equity_fund" as const,
+    currentValue: 18_840_000,
+    yieldRate: 0.065,
+  },
+  {
+    token: "iSNR",
+    managedBy: "Invesco",
+    platform: "DigiFT",
+    assetType: "private_credit" as const,
+    currentValue: 10_990_000,
+    yieldRate: 0.07,
+  },
 ];
 
 const VAULT_BORROWS = [
-  { id: "GT-1", collateralToken: "OUSG", collateralAmount: 100, borrowedUSDC: 60, fixedRate: 0.03, maturityDate: "2025-06-01" },
-  { id: "GT-2", collateralToken: "OUSG", collateralAmount: 60, borrowedUSDC: 36, fixedRate: 0.03, maturityDate: "2025-06-01" },
+  {
+    id: "GT-1",
+    collateralToken: "bEQTY",
+    collateralValue: 18_840_000,
+    borrowedUSDC: 7_200_000,
+    fixedRate: 0.04,
+    maturityDate: "2025-06-03",
+    currentLTV: 0.382,
+  },
+  {
+    id: "GT-2",
+    collateralToken: "iSNR",
+    collateralValue: 10_990_000,
+    borrowedUSDC: 4_200_000,
+    fixedRate: 0.04,
+    maturityDate: "2025-06-03",
+    currentLTV: 0.382,
+  },
 ];
 
 const VAULT_FEES = {
   managementFeeRate: 0.02,
   performanceFeeRate: 0.20,
-  highWaterMark: 1.0200,
-  accruedManagementFee: 0.88,
-  accruedPerformanceFee: 0.52,
+  highWaterMark: 1.00,
+  accruedManagementFee: 0,
+  accruedPerformanceFee: 0,
 };
 
 const VAULT_SHARES = {
-  totalSharesOutstanding: 60,
-  lpInvestedCapital: 60,
-  accumulatedEarnings: 3.60,
+  totalSharesOutstanding: 20_000_000,
+  lpInvestedCapital: 20_000_000,
+  navPerShare: 1.00,
 };
 
-function formatUSD(v: number) {
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
-  return `$${v.toFixed(2)}`;
-}
 export default function CuratorDashboard() {
   return (
     <div className="p-6 space-y-6">
@@ -52,7 +77,13 @@ export default function CuratorDashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Left: Balance Sheet (2 cols) */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="xl:col-span-2">
-          <VaultBalanceSheet cash={VAULT_CASH} rwaPositions={VAULT_RWA} borrowPositions={VAULT_BORROWS} fees={VAULT_FEES} shares={VAULT_SHARES} navMTM={63.20} />
+          <VaultBalanceSheet
+            cash={VAULT_CASH}
+            rwaPositions={VAULT_RWA}
+            borrowPositions={VAULT_BORROWS}
+            fees={VAULT_FEES}
+            shares={VAULT_SHARES}
+          />
         </motion.div>
 
         {/* Right: Action Panel */}
@@ -68,8 +99,8 @@ export default function CuratorDashboard() {
               <TabsContent value="rwa" className="space-y-4">
                 <h4 className="font-display font-semibold text-sm text-foreground">Buy RWA Token</h4>
                 <select className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm text-foreground font-mono">
-                  <option>OUSG (Ondo)</option>
-                  <option>DigiFT T-Bill</option>
+                  <option>bEQTY (BNY via DigiFT)</option>
+                  <option>iSNR (Invesco via DigiFT)</option>
                 </select>
                 <input type="number" placeholder="USDC Amount" className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground" />
                 <Button className="w-full"><ArrowDownToLine className="h-4 w-4" />Buy RWA</Button>
@@ -82,15 +113,14 @@ export default function CuratorDashboard() {
               <TabsContent value="borrow" className="space-y-4">
                 <h4 className="font-display font-semibold text-sm text-foreground">Open GT Position</h4>
                 <select className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm text-foreground font-mono">
-                  <option>OUSG → USDC (90d @ 4.2%)</option>
-                  <option>OUSG → USDC (180d @ 3.95%)</option>
-                  <option>DigiFT → USDC (60d @ 4.5%)</option>
+                  <option>bEQTY → USDC (90d @ 4.0%)</option>
+                  <option>iSNR → USDC (90d @ 4.0%)</option>
                 </select>
                 <input type="number" placeholder="Collateral Amount" className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground" />
                 <div className="p-3 rounded-lg bg-secondary/50 border border-border space-y-1.5 text-xs">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Fixed Rate</span><span className="text-primary font-mono">4.20%</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Est. LTV</span><span className="text-foreground font-mono">62%</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Maturity</span><span className="text-foreground font-mono">2026-06-15</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Fixed Rate</span><span className="text-primary font-mono">4.00%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Est. LTV</span><span className="text-foreground font-mono">38.2%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Maturity</span><span className="text-foreground font-mono">2025-09-03</span></div>
                 </div>
                 <Button className="w-full"><Activity className="h-4 w-4" />Open Position</Button>
               </TabsContent>
