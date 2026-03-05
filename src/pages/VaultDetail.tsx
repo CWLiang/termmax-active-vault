@@ -69,7 +69,7 @@ const APY_MAP: Record<string, number> = {
 };
 
 type RateType = "fixed" | "variable" | null;
-type AllocationCategory = "RWA" | "Yield" | "Loan" | "Cash";
+type AllocationCategory = "RWA" | "Yield" | "Loan" | "Instant Liquidity";
 
 interface AllocationItem {
   name: string;
@@ -85,36 +85,33 @@ const CATEGORY_COLORS: Record<AllocationCategory, string> = {
   RWA: "hsl(187, 100%, 50%)",
   Yield: "hsl(270, 70%, 55%)",
   Loan: "hsl(0, 65%, 55%)",
-  Cash: "hsl(215, 15%, 55%)",
+  "Instant Liquidity": "hsl(160, 70%, 45%)",
 };
 
 const ALLOCATION_DATA: AllocationItem[] = [
-  // RWA
   { name: "OUSG", protocol: "Ondo Finance", category: "RWA", rateType: null, value: 42, amount: 5250000, color: CATEGORY_COLORS.RWA },
   { name: "DigiFT Treasury", protocol: "DigiFT", category: "RWA", rateType: null, value: 12, amount: 1500000, color: CATEGORY_COLORS.RWA },
-  // Yield — Variable
   { name: "USDC Supply", protocol: "Morpho", category: "Yield", rateType: "variable", value: 8, amount: 1000000, color: CATEGORY_COLORS.Yield },
-  // Yield — Fixed
   { name: "FT-USDC-Jun26", protocol: "TermMax", category: "Yield", rateType: "fixed", value: 10, amount: 1250000, color: CATEGORY_COLORS.Yield },
   { name: "PT-sUSDe-Mar26", protocol: "Pendle", category: "Yield", rateType: "fixed", value: 6, amount: 750000, color: CATEGORY_COLORS.Yield },
-  // Loan — Variable
   { name: "USDC Borrow", protocol: "AAVE", category: "Loan", rateType: "variable", value: 5, amount: 625000, color: CATEGORY_COLORS.Loan },
-  // Loan — Fixed
   { name: "GT-USDC-Jun26", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 2, amount: 250000, color: CATEGORY_COLORS.Loan },
-  // Cash
-  { name: "Cash Buffer", protocol: "Vault", category: "Cash", rateType: null, value: 15, amount: 1875000, color: CATEGORY_COLORS.Cash },
+  { name: "USDC", protocol: "Vault", category: "Instant Liquidity", rateType: null, value: 15, amount: 1875000, color: CATEGORY_COLORS["Instant Liquidity"] },
 ];
 
 const CATEGORY_META: Record<AllocationCategory, { label: string }> = {
   RWA: { label: "RWA" },
   Yield: { label: "Yield" },
   Loan: { label: "Loan" },
-  Cash: { label: "Cash" },
+  "Instant Liquidity": { label: "Instant Liquidity" },
 };
 
-// Group for pie chart (by category)
+// Assets only (exclude Loan) for pie chart
+const ASSET_CATEGORIES: AllocationCategory[] = ["RWA", "Yield", "Instant Liquidity"];
+const LOAN_DATA = ALLOCATION_DATA.filter((d) => d.category === "Loan");
+
 const PIE_DATA = Object.entries(
-  ALLOCATION_DATA.reduce((acc, item) => {
+  ALLOCATION_DATA.filter((d) => d.category !== "Loan").reduce((acc, item) => {
     acc[item.category] = (acc[item.category] || 0) + item.value;
     return acc;
   }, {} as Record<string, number>)
@@ -275,27 +272,26 @@ function RateTypeBadge({ type }: { type: RateType }) {
   );
 }
 
-// --- Portfolio / Asset Allocation ---
-function TransparencySection() {
-  const categories: AllocationCategory[] = ["RWA", "Yield", "Loan", "Cash"];
-
+// --- Portfolio / Asset Allocation (excludes Loan) ---
+function PortfolioSection() {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
       className="rounded-xl border border-border bg-card p-5">
       <h3 className="font-display font-semibold text-foreground mb-5">Portfolio — Asset Allocation</h3>
       <div className="flex flex-col sm:flex-row items-start gap-8">
-        {/* Pie chart by category */}
-        <div className="w-44 h-44 flex-shrink-0 self-center">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={PIE_DATA} innerRadius={44} outerRadius={68} dataKey="value" strokeWidth={2} stroke="hsl(220, 18%, 10%)">
-                {PIE_DATA.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-          {/* Legend under pie */}
+        {/* Pie chart — assets only */}
+        <div className="w-44 flex-shrink-0 self-center">
+          <div className="h-44">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={PIE_DATA} innerRadius={44} outerRadius={68} dataKey="value" strokeWidth={2} stroke="hsl(220, 18%, 10%)">
+                  {PIE_DATA.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
           <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2">
             {PIE_DATA.map((entry, i) => (
               <span key={i} className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
@@ -306,9 +302,9 @@ function TransparencySection() {
           </div>
         </div>
 
-        {/* Categorized breakdown */}
+        {/* Asset breakdown */}
         <div className="flex-1 w-full space-y-5">
-          {categories.map((cat) => {
+          {ASSET_CATEGORIES.map((cat) => {
             const items = ALLOCATION_DATA.filter((d) => d.category === cat);
             if (items.length === 0) return null;
             const meta = CATEGORY_META[cat];
@@ -318,7 +314,6 @@ function TransparencySection() {
 
             return (
               <div key={cat}>
-                {/* Category header with color accent */}
                 <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-border">
                   <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: catColor }}>
                     <span className="w-3 h-3 rounded" style={{ background: catColor }} />
@@ -328,8 +323,6 @@ function TransparencySection() {
                     <span className="text-muted-foreground font-normal ml-1.5">{formatUSD(catAmount)}</span>
                   </span>
                 </div>
-
-                {/* Items — clean, no color dots */}
                 <div className="pl-5">
                   {items.map((item, i) => (
                     <div key={i} className="flex items-center justify-between py-1.5">
@@ -349,6 +342,45 @@ function TransparencySection() {
             );
           })}
         </div>
+      </div>
+    </motion.div>
+  );
+}
+
+// --- Loan Positions (separate panel) ---
+function LoanSection() {
+  const totalLoan = LOAN_DATA.reduce((s, i) => s + i.amount, 0);
+  const catColor = CATEGORY_COLORS.Loan;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
+      className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-display font-semibold text-foreground flex items-center gap-2">
+          <span className="w-3 h-3 rounded" style={{ background: catColor }} />
+          Outstanding Loans
+        </h3>
+        <span className="text-sm font-mono font-semibold" style={{ color: catColor }}>{formatUSD(totalLoan)}</span>
+      </div>
+      <div className="space-y-0">
+        {LOAN_DATA.map((item, i) => (
+          <div key={i} className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-foreground">{item.name}</span>
+              <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
+              <RateTypeBadge type={item.rateType} />
+            </div>
+            <span className="font-mono text-sm text-foreground">{formatUSD(item.amount)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+        <span>Net Asset Value = Assets − Loans</span>
+        <span className="font-mono text-foreground font-semibold">
+          {formatUSD(
+            ALLOCATION_DATA.filter(d => d.category !== "Loan").reduce((s, i) => s + i.amount, 0) - totalLoan
+          )}
+        </span>
       </div>
     </motion.div>
   );
@@ -587,8 +619,11 @@ export default function VaultDetailPage() {
           {/* 1. NAV Chart (hero visual — includes APY toggle) */}
           <NAVChart />
 
-          {/* 2. Transparency — Asset Allocation (visual) */}
-          <TransparencySection />
+          {/* 2. Portfolio — Asset Allocation */}
+          <PortfolioSection />
+
+          {/* 2b. Outstanding Loans */}
+          <LoanSection />
 
           {/* 3. Redemption Capacity (visual) */}
           <RedemptionCapacity />
