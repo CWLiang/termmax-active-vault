@@ -24,17 +24,17 @@ const VAULT_DATA = {
   apy7d: 8.42,
   apy30d: 7.95,
   apy90d: 7.70,
-  tvl: 20_000_000,
+  tvl: 20_296_699,
   capacity: 50_000_000,
-  bufferRatio: 5.0,
+  bufferRatio: 4.9,
   bufferAmount: 1_570_000,
-  nav: 1.0000,
+  nav: 1.0148,
   navDelta24h: 0.021,
   navDelta7d: 0.15,
-  sharePrice: 1.0000,
+  sharePrice: 1.0148,
   positions: { rwa: 95, cash: 5 },
   managementFee: 2.0,
-  performanceFee: 20.0,
+  performanceFee: 10.0,
   yieldType: "Auto-compounded in NAV",
   redemptionTimeline: "10–30 days queued",
   custody: "Fordefi",
@@ -44,23 +44,23 @@ const VAULT_DATA = {
   bugBountyUrl: "https://immunefi.com/bug-bounty/termstructurelabs/information/",
   defiSafetyScore: 93,
   defiSafetyUrl: "https://www.defisafety.com/app/pqrs/613",
-  inceptionDate: "Jan 2026",
+  inceptionDate: "Jan 2025",
   contractAddress: "0x1a2b3c4d5e6f7890abcdef1234567890abcdef12",
   strategyContract: "0xabcdef1234567890abcdef1234567890abcdef12",
 };
 
-// Mock NAV history for chart — different lengths per timeframe
+// Mock NAV history — starts at $1.00, ends at ~$1.0148
 const NAV_HISTORY_7D = Array.from({ length: 7 }, (_, i) => ({
-  day: `Feb ${i + 22}`,
-  nav: +(0.996 + Math.random() * 0.005 + i * 0.0006).toFixed(4),
+  day: `Feb ${i + 27}`,
+  nav: +(1.011 + Math.random() * 0.003 + i * 0.0005).toFixed(4),
 }));
 const NAV_HISTORY_30D = Array.from({ length: 30 }, (_, i) => ({
   day: `Feb ${i + 1}`,
-  nav: +(0.993 + Math.random() * 0.008 + i * 0.0003).toFixed(4),
+  nav: +(1.005 + Math.random() * 0.005 + i * 0.0003).toFixed(4),
 }));
-const NAV_HISTORY_90D = Array.from({ length: 90 }, (_, i) => ({
-  day: `Dec ${(i % 31) + 1}`,
-  nav: +(0.988 + Math.random() * 0.012 + i * 0.00013).toFixed(4),
+const NAV_HISTORY_90D = Array.from({ length: 64 }, (_, i) => ({
+  day: `Jan ${(i % 31) + 1}`,
+  nav: +(1.000 + Math.random() * 0.004 + i * 0.00023).toFixed(4),
 }));
 
 const NAV_DATA_MAP: Record<string, typeof NAV_HISTORY_7D> = {
@@ -94,13 +94,13 @@ const CATEGORY_COLORS: Record<AllocationCategory, string> = {
   "Instant Liquidity": "hsl(160, 70%, 45%)",
 };
 
-// Percentages are of Total Assets ($31.4M gross)
+// Percentages are of Total Assets ($31.88M gross)
 const ALLOCATION_DATA: AllocationItem[] = [
-  { name: "bEQTY", protocol: "DigiFT", category: "RWA", rateType: null, value: 60, amount: 18_840_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=bEQTY" },
-  { name: "iSNR", protocol: "DigiFT", category: "RWA", rateType: null, value: 35, amount: 10_990_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=iSNR" },
-  { name: "GT-1 (bEQTY collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 23, amount: 7_200_000, color: CATEGORY_COLORS.Loan },
-  { name: "GT-2 (iSNR collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 13, amount: 4_200_000, color: CATEGORY_COLORS.Loan },
-  { name: "USDC", protocol: "Vault", category: "Instant Liquidity", rateType: null, value: 5, amount: 1_570_000, color: CATEGORY_COLORS["Instant Liquidity"] },
+  { name: "bEQTY", protocol: "DigiFT", category: "RWA", rateType: null, value: 60.6, amount: 19_322_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=bEQTY" },
+  { name: "iSNR", protocol: "DigiFT", category: "RWA", rateType: null, value: 34.5, amount: 10_990_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=iSNR" },
+  { name: "GT-1 (bEQTY collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 22.6, amount: 7_200_000, color: CATEGORY_COLORS.Loan },
+  { name: "GT-2 (iSNR collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 13.2, amount: 4_200_000, color: CATEGORY_COLORS.Loan },
+  { name: "USDC", protocol: "Vault", category: "Instant Liquidity", rateType: null, value: 4.9, amount: 1_570_000, color: CATEGORY_COLORS["Instant Liquidity"] },
 ];
 
 const CATEGORY_META: Record<AllocationCategory, { label: string }> = {
