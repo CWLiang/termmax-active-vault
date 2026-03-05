@@ -600,9 +600,32 @@ export default function VaultDetailPage() {
           </motion.div>
 
           {/* TVL Stat */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-2 gap-3">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <StatCard label="TVL" value={formatUSD(VAULT_DATA.tvl)} />
-            <StatCard label="Capacity" value={formatUSD(VAULT_DATA.capacity)} subValue={`${((VAULT_DATA.tvl / VAULT_DATA.capacity) * 100).toFixed(0)}% filled`} />
+            <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Vault Capacity</span>
+                <span className="text-xs font-mono text-muted-foreground">
+                  {((VAULT_DATA.tvl / VAULT_DATA.capacity) * 100).toFixed(0)}% filled
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-display font-bold text-foreground">{formatUSD(VAULT_DATA.capacity)}</span>
+                <span className="text-xs text-muted-foreground font-mono">cap</span>
+              </div>
+              <div className="space-y-1.5">
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all duration-500"
+                    style={{ width: `${(VAULT_DATA.tvl / VAULT_DATA.capacity) * 100}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] font-mono text-muted-foreground">
+                  <span>Deposited: {formatUSD(VAULT_DATA.tvl)}</span>
+                  <span className="text-primary">Available: {formatUSD(VAULT_DATA.capacity - VAULT_DATA.tvl)}</span>
+                </div>
+              </div>
+            </div>
           </motion.div>
 
           {/* 1. NAV Chart (hero visual — includes APY toggle) */}
