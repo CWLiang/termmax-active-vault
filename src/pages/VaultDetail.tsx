@@ -36,9 +36,14 @@ const VAULT_DATA = {
   managementFee: 1.0,
   performanceFee: 10.0,
   yieldType: "Auto-compounded in NAV",
-  redemptionTimeline: "Instant up to buffer, 1–3 days queued",
+  redemptionTimeline: "10–30 days queued",
   custody: "Non-custodial smart contract",
-  auditor: "OpenZeppelin",
+  auditor: "Cantina, ABDK",
+  auditUrl: "https://github.com/term-structure/audits/tree/main/TermMax",
+  bugBounty: "Immunefi",
+  bugBountyUrl: "https://immunefi.com/bug-bounty/termstructurelabs/information/",
+  defiSafetyScore: 93,
+  defiSafetyUrl: "https://www.defisafety.com/app/pqrs/613",
   inceptionDate: "Jan 2026",
   contractAddress: "0x1a2b3c4d5e6f7890abcdef1234567890abcdef12",
   strategyContract: "0xabcdef1234567890abcdef1234567890abcdef12",
@@ -138,6 +143,11 @@ function formatUSD(value: number) {
 
 function truncateAddress(addr: string) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text);
+  toast.success("Address copied to clipboard");
 }
 
 // --- Factsheet Section ---
