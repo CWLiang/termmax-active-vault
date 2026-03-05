@@ -746,6 +746,19 @@ export default function VaultDetailPage() {
               ))}
             </div>
           </motion.div>
+
+          {/* Risk Disclaimer */}
+          <div className="mt-2 mb-2 rounded-lg border border-border/40 bg-card/50 px-5 py-4">
+            <div className="flex items-start gap-2.5">
+              <Info className="h-3.5 w-3.5 text-muted-foreground/40 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="text-[11px] font-mono font-semibold text-muted-foreground/50 uppercase tracking-wider mb-1.5">Risk Disclaimer</h4>
+                <p className="text-[11px] text-muted-foreground/40 leading-relaxed">
+                  Investing in TermMax Active Vaults involves risk, including potential loss of principal due to smart contract vulnerabilities, market volatility, and liquidity constraints. Please review all relevant documentation before proceeding.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Right: Deposit/Withdraw Panel */}
@@ -781,21 +794,7 @@ export default function VaultDetailPage() {
               </Tabs>
             </div>
           </div>
-
         </motion.div>
-      </div>
-
-      {/* Risk Disclaimer */}
-      <div className="mt-6 mb-2 rounded-lg border border-border/40 bg-card/50 px-5 py-4 max-w-6xl mx-auto">
-        <div className="flex items-start gap-2.5">
-          <Info className="h-3.5 w-3.5 text-muted-foreground/40 mt-0.5 flex-shrink-0" />
-          <div>
-            <h4 className="text-[11px] font-mono font-semibold text-muted-foreground/50 uppercase tracking-wider mb-1.5">Risk Disclaimer</h4>
-            <p className="text-[11px] text-muted-foreground/40 leading-relaxed">
-              Investing in TermMax Active Vaults involves risk, including potential loss of principal due to smart contract vulnerabilities, market volatility, and liquidity constraints. Please review all relevant documentation before proceeding.
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );
