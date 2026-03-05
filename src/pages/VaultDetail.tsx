@@ -620,8 +620,7 @@ export default function VaultDetailPage() {
                     style={{ width: `${(VAULT_DATA.tvl / VAULT_DATA.capacity) * 100}%` }}
                   />
                 </div>
-                <div className="flex justify-between text-[10px] font-mono text-muted-foreground">
-                  <span>Deposited: {formatUSD(VAULT_DATA.tvl)}</span>
+                <div className="flex justify-end text-[10px] font-mono">
                   <span className="text-primary">Available: {formatUSD(VAULT_DATA.capacity - VAULT_DATA.tvl)}</span>
                 </div>
               </div>
