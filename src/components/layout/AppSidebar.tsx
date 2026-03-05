@@ -27,12 +27,7 @@ const depositorItems = [
 ];
 
 const curatorItems = [
-  { title: "Dashboard", url: "/curator", icon: LayoutDashboard },
-  { title: "RWA Operations", url: "/curator/rwa", icon: Coins },
-  { title: "TermMax Borrow", url: "/curator/borrow", icon: Activity },
-  { title: "Risk & Buffer", url: "/curator/risk", icon: AlertTriangle },
-  { title: "Governance", url: "/curator/governance", icon: Shield },
-  { title: "Analytics", url: "/curator/analytics", icon: BarChart3 },
+  { title: "Console", url: "/curator", icon: LayoutDashboard },
 ];
 
 export function AppSidebar() {
