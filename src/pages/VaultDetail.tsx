@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   TrendingUp, Shield, Clock, ChevronDown, ChevronUp, ArrowDownToLine, ArrowUpFromLine,
-  PieChart as PieChartIcon, Activity, ExternalLink, Info, FileText, Lock, Copy
+  PieChart as PieChartIcon, Activity, ExternalLink, Info, FileText, Lock, Copy, Bug, ShieldCheck
 } from "lucide-react";
+import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid } from "recharts";
@@ -35,9 +36,14 @@ const VAULT_DATA = {
   managementFee: 1.0,
   performanceFee: 10.0,
   yieldType: "Auto-compounded in NAV",
-  redemptionTimeline: "Instant up to buffer, 1–3 days queued",
+  redemptionTimeline: "10–30 days queued",
   custody: "Non-custodial smart contract",
-  auditor: "OpenZeppelin",
+  auditor: "Cantina, ABDK",
+  auditUrl: "https://github.com/term-structure/audits/tree/main/TermMax",
+  bugBounty: "Immunefi",
+  bugBountyUrl: "https://immunefi.com/bug-bounty/termstructurelabs/information/",
+  defiSafetyScore: 93,
+  defiSafetyUrl: "https://www.defisafety.com/app/pqrs/613",
   inceptionDate: "Jan 2026",
   contractAddress: "0x1a2b3c4d5e6f7890abcdef1234567890abcdef12",
   strategyContract: "0xabcdef1234567890abcdef1234567890abcdef12",
@@ -139,6 +145,11 @@ function truncateAddress(addr: string) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text);
+  toast.success("Address copied to clipboard");
+}
+
 // --- Factsheet Section ---
 function FactsheetSection() {
   return (
@@ -163,11 +174,33 @@ function FactsheetSection() {
             <TableCell className="text-foreground text-sm py-2.5 px-0">{VAULT_DATA.redemptionTimeline}</TableCell>
           </TableRow>
           <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Management Fee</TableCell>
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="flex items-center gap-1 cursor-help border-b border-dashed border-muted-foreground/40">
+                    Management Fee <Info className="h-3 w-3" />
+                  </TooltipTrigger>
+                  <TooltipContent className="text-xs max-w-xs">
+                    Fee charged by TermMax to maintain the platform
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableCell>
             <TableCell className="text-foreground text-sm font-mono py-2.5 px-0">{VAULT_DATA.managementFee}%</TableCell>
           </TableRow>
           <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Performance Fee</TableCell>
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="flex items-center gap-1 cursor-help border-b border-dashed border-muted-foreground/40">
+                    Performance Fee <Info className="h-3 w-3" />
+                  </TooltipTrigger>
+                  <TooltipContent className="text-xs max-w-xs">
+                    Fee charged by curator to execute the strategy
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </TableCell>
             <TableCell className="text-foreground text-sm font-mono py-2.5 px-0">{VAULT_DATA.performanceFee}%</TableCell>
           </TableRow>
           <TableRow className="border-border">
@@ -179,7 +212,30 @@ function FactsheetSection() {
           </TableRow>
           <TableRow className="border-border">
             <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Auditor</TableCell>
-            <TableCell className="text-foreground text-sm py-2.5 px-0">{VAULT_DATA.auditor}</TableCell>
+            <TableCell className="text-sm py-2.5 px-0">
+              <a href={VAULT_DATA.auditUrl} target="_blank" rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1">
+                {VAULT_DATA.auditor} <ExternalLink className="h-3 w-3" />
+              </a>
+            </TableCell>
+          </TableRow>
+          <TableRow className="border-border">
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Bug Bounty</TableCell>
+            <TableCell className="text-sm py-2.5 px-0">
+              <a href={VAULT_DATA.bugBountyUrl} target="_blank" rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1">
+                <Bug className="h-3 w-3" /> {VAULT_DATA.bugBounty} <ExternalLink className="h-3 w-3" />
+              </a>
+            </TableCell>
+          </TableRow>
+          <TableRow className="border-border">
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">DeFi Safety</TableCell>
+            <TableCell className="text-sm py-2.5 px-0">
+              <a href={VAULT_DATA.defiSafetyUrl} target="_blank" rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1">
+                <ShieldCheck className="h-3 w-3" /> Score: {VAULT_DATA.defiSafetyScore}% <ExternalLink className="h-3 w-3" />
+              </a>
+            </TableCell>
           </TableRow>
           <TableRow className="border-border">
             <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Inception</TableCell>
@@ -579,6 +635,22 @@ export default function VaultDetailPage() {
               <h1 className="text-2xl font-display font-bold text-foreground">{VAULT_DATA.name}</h1>
               <TooltipProvider>
                 <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button onClick={() => copyToClipboard(VAULT_DATA.contractAddress)}
+                      className="flex items-center gap-1 text-xs font-mono text-muted-foreground bg-secondary px-2 py-0.5 rounded hover:text-foreground transition-colors cursor-pointer">
+                      {truncateAddress(VAULT_DATA.contractAddress)}
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="text-xs">Click to copy address</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <a href={`https://etherscan.io/address/${VAULT_DATA.contractAddress}`} target="_blank" rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-primary transition-colors">
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+              <TooltipProvider>
+                <Tooltip>
                   <TooltipTrigger>
                     <span className="text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded cursor-help">
                       Leveraged RWA
@@ -732,19 +804,36 @@ export default function VaultDetailPage() {
             <div className="space-y-2">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-muted-foreground">Vault</span>
-                <span className="font-mono text-primary flex items-center gap-1 cursor-pointer hover:underline">
-                  {truncateAddress(VAULT_DATA.contractAddress)} <ExternalLink className="h-3 w-3" />
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => copyToClipboard(VAULT_DATA.contractAddress)}
+                    className="text-muted-foreground hover:text-foreground transition-colors">
+                    <Copy className="h-3 w-3" />
+                  </button>
+                  <a href={`https://etherscan.io/address/${VAULT_DATA.contractAddress}`} target="_blank" rel="noopener noreferrer"
+                    className="font-mono text-primary hover:underline inline-flex items-center gap-1">
+                    {truncateAddress(VAULT_DATA.contractAddress)} <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-muted-foreground">Strategy</span>
-                <span className="font-mono text-primary flex items-center gap-1 cursor-pointer hover:underline">
-                  {truncateAddress(VAULT_DATA.strategyContract)} <ExternalLink className="h-3 w-3" />
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => copyToClipboard(VAULT_DATA.strategyContract)}
+                    className="text-muted-foreground hover:text-foreground transition-colors">
+                    <Copy className="h-3 w-3" />
+                  </button>
+                  <a href={`https://etherscan.io/address/${VAULT_DATA.strategyContract}`} target="_blank" rel="noopener noreferrer"
+                    className="font-mono text-primary hover:underline inline-flex items-center gap-1">
+                    {truncateAddress(VAULT_DATA.strategyContract)} <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
               </div>
             </div>
             <div className="text-xs text-muted-foreground flex items-center gap-1 pt-1">
-              <Shield className="h-3 w-3 text-buffer-safe" /> Audited by {VAULT_DATA.auditor}
+              <Shield className="h-3 w-3 text-buffer-safe" /> Audited by{" "}
+              <a href={VAULT_DATA.auditUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                {VAULT_DATA.auditor}
+              </a>
             </div>
           </div>
         </motion.div>
