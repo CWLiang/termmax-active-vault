@@ -272,12 +272,62 @@ function RateTypeBadge({ type }: { type: RateType }) {
   );
 }
 
+// --- Collapsible category list (show 2 by default) ---
+const MAX_VISIBLE = 2;
+
+function CollapsibleItems({ items, renderItem }: { items: any[]; renderItem: (item: any, i: number) => React.ReactNode }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsCollapse = items.length > MAX_VISIBLE;
+  const visible = needsCollapse && !expanded ? items.slice(0, MAX_VISIBLE) : items;
+  const hiddenCount = items.length - MAX_VISIBLE;
+
+  return (
+    <div>
+      {visible.map((item, i) => renderItem(item, i))}
+      {needsCollapse && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors mt-1 pl-0"
+        >
+          {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          {expanded ? "Show less" : `+${hiddenCount} more`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // --- Portfolio — Combined Assets, Loans & NAV ---
 function PortfolioSection() {
   const totalAssets = ALLOCATION_DATA.filter(d => d.category !== "Loan").reduce((s, i) => s + i.amount, 0);
   const totalLoans = LOAN_DATA.reduce((s, i) => s + i.amount, 0);
   const nav = totalAssets - totalLoans;
   const loanColor = CATEGORY_COLORS.Loan;
+
+  const renderAssetItem = (item: AllocationItem, i: number) => (
+    <div key={i} className="flex items-center justify-between py-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-foreground">{item.name}</span>
+        <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
+        <RateTypeBadge type={item.rateType} />
+      </div>
+      <div className="flex items-center gap-4">
+        <span className="font-mono text-sm text-foreground w-10 text-right">{item.value}%</span>
+        <span className="font-mono text-xs text-muted-foreground w-16 text-right">{formatUSD(item.amount)}</span>
+      </div>
+    </div>
+  );
+
+  const renderLoanItem = (item: AllocationItem, i: number) => (
+    <div key={i} className="flex items-center justify-between py-1.5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-foreground">{item.name}</span>
+        <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
+        <RateTypeBadge type={item.rateType} />
+      </div>
+      <span className="font-mono text-sm text-foreground">{formatUSD(item.amount)}</span>
+    </div>
+  );
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
@@ -349,19 +399,7 @@ function PortfolioSection() {
                   </span>
                 </div>
                 <div className="pl-5">
-                  {items.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between py-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-foreground">{item.name}</span>
-                        <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
-                        <RateTypeBadge type={item.rateType} />
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="font-mono text-sm text-foreground w-10 text-right">{item.value}%</span>
-                        <span className="font-mono text-xs text-muted-foreground w-16 text-right">{formatUSD(item.amount)}</span>
-                      </div>
-                    </div>
-                  ))}
+                  <CollapsibleItems items={items} renderItem={renderAssetItem} />
                 </div>
               </div>
             );
@@ -379,16 +417,7 @@ function PortfolioSection() {
               </span>
             </div>
             <div className="pl-5">
-              {LOAN_DATA.map((item, i) => (
-                <div key={i} className="flex items-center justify-between py-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-foreground">{item.name}</span>
-                    <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
-                    <RateTypeBadge type={item.rateType} />
-                  </div>
-                  <span className="font-mono text-sm text-foreground">{formatUSD(item.amount)}</span>
-                </div>
-              ))}
+              <CollapsibleItems items={LOAN_DATA} renderItem={renderLoanItem} />
             </div>
           </div>
         </div>
