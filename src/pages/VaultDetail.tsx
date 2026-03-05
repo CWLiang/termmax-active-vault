@@ -712,15 +712,24 @@ export default function VaultDetailPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Deposited</span>
-                <span className="font-mono text-foreground">$10,000.00</span>
+                <div className="text-right">
+                  <span className="font-mono text-foreground">10,000.00 USDC</span>
+                  <span className="block text-[10px] font-mono text-muted-foreground">≈ $10,000.00</span>
+                </div>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Current Value</span>
-                <span className="font-mono text-foreground">$10,342.00</span>
+                <div className="text-right">
+                  <span className="font-mono text-foreground">10,342.00 USDC</span>
+                  <span className="block text-[10px] font-mono text-muted-foreground">≈ $10,342.00</span>
+                </div>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Realized Yield</span>
-                <span className="font-mono text-yield-positive">+$342.00</span>
+                <div className="text-right">
+                  <span className="font-mono text-yield-positive">+342.00 USDC</span>
+                  <span className="block text-[10px] font-mono text-muted-foreground">≈ +$342.00</span>
+                </div>
               </div>
             </div>
           </div>
