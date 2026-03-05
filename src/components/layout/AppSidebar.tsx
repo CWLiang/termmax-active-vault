@@ -24,7 +24,6 @@ import {
 
 const depositorItems = [
   { title: "Vaults", url: "/", icon: Vault },
-  { title: "My Positions", url: "/positions", icon: BarChart3 },
 ];
 
 const curatorItems = [
