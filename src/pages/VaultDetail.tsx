@@ -444,24 +444,35 @@ function NAVChart() {
 function DepositPanel() {
   const [amount, setAmount] = useState("");
   const parsedAmount = parseFloat(amount) || 0;
-  const estimatedShares = parsedAmount / VAULT_DATA.nav;
+  const remainingCapacity = VAULT_DATA.capacity - VAULT_DATA.tvl;
+  const exceedsCapacity = parsedAmount > remainingCapacity;
 
   return (
     <div className="space-y-4">
       <div>
         <label className="text-xs text-muted-foreground font-mono mb-1.5 block">Deposit Amount (USDC)</label>
         <Input type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)}
-          className="font-mono text-lg bg-secondary border-border" />
+          className={cn("font-mono text-lg bg-secondary border-border", exceedsCapacity && "border-destructive focus-visible:ring-destructive")} />
       </div>
-      {parsedAmount > 0 && (
+      {parsedAmount > 0 && !exceedsCapacity && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2 p-3 rounded-lg bg-secondary/50 border border-border">
           <div className="flex justify-between text-xs">
             <span className="text-muted-foreground">Remaining Capacity</span>
-            <span className="text-foreground font-mono">{formatUSD(VAULT_DATA.capacity - VAULT_DATA.tvl)}</span>
+            <span className="text-foreground font-mono">{formatUSD(remainingCapacity)}</span>
           </div>
         </motion.div>
       )}
-      <Button className="w-full" disabled={parsedAmount <= 0}>
+      {exceedsCapacity && (
+        <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 space-y-1.5">
+          <p className="text-xs text-destructive font-semibold">
+            Exceeds vault capacity
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            Remaining capacity is <span className="font-mono font-semibold text-foreground">{formatUSD(remainingCapacity)}</span>. Please enter an amount within the limit.
+          </p>
+        </motion.div>
+      )}
+      <Button className="w-full" disabled={parsedAmount <= 0 || exceedsCapacity}>
         <ArrowDownToLine className="h-4 w-4" /> Deposit USDC
       </Button>
     </div>
