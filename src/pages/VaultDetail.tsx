@@ -37,7 +37,7 @@ const VAULT_DATA = {
   performanceFee: 10.0,
   yieldType: "Auto-compounded in NAV",
   redemptionTimeline: "10–30 days queued",
-  custody: "Non-custodial smart contract",
+  custody: "Fordefi",
   auditor: "Cantina, ABDK",
   auditUrl: "https://github.com/term-structure/audits/tree/main/TermMax",
   bugBounty: "Immunefi",
