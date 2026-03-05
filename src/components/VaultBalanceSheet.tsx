@@ -1,8 +1,9 @@
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   DollarSign, TrendingUp, Shield, Clock,
   Landmark, Wallet, BarChart3, Users, Award, AlertTriangle,
-  Banknote, Lock, Timer, CheckCircle2, Waves,
+  Banknote, Lock, Timer, CheckCircle2, Waves, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -142,6 +143,53 @@ function computeAmortizedValue(frt: FRTPosition, today: string) {
   return frt.purchasePrice + (frt.faceValue - frt.purchasePrice) * (elapsed / totalDays);
 }
 
+/* ─── Collapsible Section ─── */
+function CollapsibleSection({
+  icon,
+  title,
+  subtotal,
+  defaultOpen = false,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtotal: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border-b border-border/50">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full px-5 py-3 flex items-center justify-between hover:bg-muted/5 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">{title}</span>
+          {open ? <ChevronDown className="h-3 w-3 text-muted-foreground/50" /> : <ChevronRight className="h-3 w-3 text-muted-foreground/50" />}
+        </div>
+        <span className="font-mono text-foreground font-semibold text-sm">{subtotal}</span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-5 pb-4">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 /* ─── Component ─── */
 export function VaultBalanceSheet({
   cash, rwaPositions, frtPositions, lendingPositions, borrowPositions, fees, shares, daysSinceInception = 64, today = "2025-03-05",
@@ -216,29 +264,38 @@ export function VaultBalanceSheet({
             <span className="font-display font-semibold text-sm text-foreground uppercase tracking-wider">Assets</span>
           </div>
 
-          {/* [1] Cash */}
-          <div className="px-5 py-4 border-b border-border/50">
-            <div className="flex items-center gap-2 mb-2">
-              <DollarSign className="h-3.5 w-3.5 text-buffer-safe" />
-              <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Cash</span>
+          {/* ★ TOTAL ASSETS — at the TOP */}
+          <div className="px-5 py-3 bg-primary/5 border-b border-primary/20">
+            <div className="flex items-center justify-between text-sm font-semibold">
+              <span className="font-display text-foreground">TOTAL ASSETS (AC)</span>
+              <span className="font-mono text-primary text-lg">{fmtFull(totalAssets_AC)}</span>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <div>
-                <span className="font-mono text-foreground">USDC Buffer</span>
-                <div className="text-[11px] text-muted-foreground font-mono mt-0.5">Minimal buffer · gas + instant redemptions</div>
-              </div>
-              <span className="font-mono text-foreground font-semibold">{fmtFull(cash)}</span>
+            <div className="flex items-center justify-between text-xs mt-0.5">
+              <span className="font-mono text-muted-foreground/60">TOTAL ASSETS (MTM)</span>
+              <span className="font-mono text-muted-foreground/60">{fmtFull(totalAssets_MTM)}</span>
             </div>
           </div>
 
-          {/* [2] Lending Positions */}
-          {lendingPositions.length > 0 && (
-            <div className="px-5 py-4 border-b border-border/50">
-              <div className="flex items-center gap-2 mb-1">
-                <Waves className="h-3.5 w-3.5 text-violet-400" />
-                <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Yield-Bearing Liquidity</span>
+          {/* [1] Cash — always visible, no collapse needed */}
+          <div className="px-5 py-3 border-b border-border/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-3.5 w-3.5 text-buffer-safe" />
+                <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Cash</span>
+                <span className="text-[10px] text-muted-foreground/50 font-mono">USDC Buffer</span>
               </div>
-              <div className="text-[10px] text-muted-foreground/60 font-mono mb-3">Withdrawable on demand · floating rate</div>
+              <span className="font-mono text-foreground font-semibold text-sm">{fmtFull(cash)}</span>
+            </div>
+          </div>
+
+          {/* [2] Lending Positions — collapsible */}
+          {lendingPositions.length > 0 && (
+            <CollapsibleSection
+              icon={<Waves className="h-3.5 w-3.5 text-violet-400" />}
+              title="Yield-Bearing Liquidity"
+              subtotal={fmtFull(totalLending)}
+            >
+              <div className="text-[10px] text-muted-foreground/60 font-mono mb-2">Withdrawable on demand · floating rate</div>
               {lendingPositions.map((l, i) => {
                 const dailyY = (l.currentValue * l.apy) / 365;
                 return (
@@ -281,19 +338,15 @@ export function VaultBalanceSheet({
                   </div>
                 );
               })}
-              <div className="flex justify-between pt-2 text-xs text-muted-foreground font-mono">
-                <span>Lending Subtotal</span>
-                <span>{fmtFull(totalLending)}</span>
-              </div>
-            </div>
+            </CollapsibleSection>
           )}
 
-          {/* [3] RWA Positions */}
-          <div className="px-5 py-4 border-b border-border/50">
-            <div className="flex items-center gap-2 mb-3">
-              <Landmark className="h-3.5 w-3.5 text-accent" />
-              <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">RWA Positions</span>
-            </div>
+          {/* [3] RWA Positions — collapsible */}
+          <CollapsibleSection
+            icon={<Landmark className="h-3.5 w-3.5 text-accent" />}
+            title="RWA Positions"
+            subtotal={fmtFull(totalRWA)}
+          >
             {rwaPositions.map((r, i) => {
               const badge = assetTypeBadge(r.assetType);
               const dailyY = (r.currentValue * r.yieldRate) / 365;
@@ -335,18 +388,14 @@ export function VaultBalanceSheet({
                 </div>
               );
             })}
-            <div className="flex justify-between pt-2 text-xs text-muted-foreground font-mono">
-              <span>RWA Subtotal</span>
-              <span>{fmtFull(totalRWA)}</span>
-            </div>
-          </div>
+          </CollapsibleSection>
 
-          {/* [4] Fixed Rate Token Positions */}
-          <div className="px-5 py-4 border-b border-border/50 flex-1">
-            <div className="flex items-center gap-2 mb-3">
-              <Timer className="h-3.5 w-3.5 text-amber-400" />
-              <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Fixed Rate Tokens</span>
-            </div>
+          {/* [4] Fixed Rate Token Positions — collapsible */}
+          <CollapsibleSection
+            icon={<Timer className="h-3.5 w-3.5 text-amber-400" />}
+            title="Fixed Rate Tokens"
+            subtotal={fmtFull(totalFRT_AC)}
+          >
             {frtAmortized.map((f, i) => {
               const totalDays = daysBetween(f.purchaseDate, f.maturityDate);
               const elapsed = Math.max(0, daysBetween(f.purchaseDate, today));
@@ -403,23 +452,10 @@ export function VaultBalanceSheet({
                 </div>
               );
             })}
-            <div className="flex justify-between pt-2 text-xs text-muted-foreground font-mono">
-              <span>FRT Subtotal (AC)</span>
-              <span>{fmtFull(totalFRT_AC)}</span>
-            </div>
-          </div>
+          </CollapsibleSection>
 
-          {/* Total Assets */}
-          <div className="px-5 py-3 mt-auto bg-primary/5 border-t border-primary/20">
-            <div className="flex items-center justify-between text-sm font-semibold">
-              <span className="font-display text-foreground">TOTAL ASSETS (AC)</span>
-              <span className="font-mono text-primary text-lg">{fmtFull(totalAssets_AC)}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs mt-0.5">
-              <span className="font-mono text-muted-foreground/60">TOTAL ASSETS (MTM)</span>
-              <span className="font-mono text-muted-foreground/60">{fmtFull(totalAssets_MTM)}</span>
-            </div>
-          </div>
+          {/* Spacer to push content */}
+          <div className="flex-1" />
         </div>
 
         {/* ── RIGHT: Liabilities + Equity ── */}
@@ -429,13 +465,28 @@ export function VaultBalanceSheet({
             <span className="font-display font-semibold text-sm text-foreground uppercase tracking-wider">Liabilities & Equity</span>
           </div>
 
-          {/* Borrow Positions */}
-          <div className="px-5 py-4 border-b border-border/50">
-            <div className="flex items-center gap-2 mb-3">
-              <Shield className="h-3.5 w-3.5 text-destructive" />
-              <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Borrow Positions</span>
+          {/* ★ TOTAL LIABILITIES + EQUITY — at the TOP */}
+          <div className="px-5 py-3 bg-accent/5 border-b border-accent/20">
+            <div className="flex items-center justify-between text-sm font-semibold">
+              <span className="font-display text-foreground">TOTAL L + E</span>
+              <span className="font-mono text-accent text-lg">{fmtFull(totalAssets_AC)}</span>
             </div>
+            <div className="flex items-center justify-between text-xs mt-1">
+              <span className="font-mono text-muted-foreground/70">Liabilities</span>
+              <span className="font-mono text-muted-foreground">{fmtFull(totalLiabilities)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-mono text-muted-foreground/70">Equity (NAV)</span>
+              <span className="font-mono text-primary">{fmtFull(nav_AC)}</span>
+            </div>
+          </div>
 
+          {/* Borrow Positions — collapsible */}
+          <CollapsibleSection
+            icon={<Shield className="h-3.5 w-3.5 text-destructive" />}
+            title="Borrow Positions"
+            subtotal={fmtFull(totalBorrows)}
+          >
             {borrowPositions.map((b) => (
               <div key={b.id} className="py-3 border-b border-border/20 last:border-0">
                 <div className="flex items-center justify-between mb-1.5">
@@ -470,19 +521,14 @@ export function VaultBalanceSheet({
                 </div>
               </div>
             ))}
+          </CollapsibleSection>
 
-            <div className="flex justify-between pt-2 text-xs text-muted-foreground font-mono">
-              <span>GT Borrows Subtotal</span>
-              <span>{fmtFull(totalBorrows)}</span>
-            </div>
-          </div>
-
-          {/* Accrued Fees */}
-          <div className="px-5 py-3 border-b border-border/50">
-            <div className="flex items-center gap-2 mb-2">
-              <Banknote className="h-3.5 w-3.5 text-accent" />
-              <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Accrued Fees</span>
-            </div>
+          {/* Accrued Fees — collapsible */}
+          <CollapsibleSection
+            icon={<Banknote className="h-3.5 w-3.5 text-accent" />}
+            title="Accrued Fees"
+            subtotal={fmtFull(totalAccruedFees)}
+          >
             <div className="flex items-center justify-between py-1 text-sm">
               <div>
                 <span className="font-mono text-muted-foreground">Management Fee <span className="text-[10px] opacity-60">→ Platform</span></span>
@@ -501,13 +547,9 @@ export function VaultBalanceSheet({
               </div>
               <span className="font-mono text-foreground">{fmtFull(fees.accruedPerformanceFee)}</span>
             </div>
-            <div className="flex justify-between pt-2 text-xs text-muted-foreground font-mono">
-              <span>Fees Subtotal</span>
-              <span>{fmtFull(totalAccruedFees)}</span>
-            </div>
-          </div>
+          </CollapsibleSection>
 
-          {/* Total Liabilities */}
+          {/* Total Liabilities line */}
           <div className="px-5 py-2 border-b border-border bg-secondary/20">
             <div className="flex items-center justify-between text-sm font-semibold">
               <span className="font-display text-foreground">TOTAL LIABILITIES</span>
@@ -515,13 +557,13 @@ export function VaultBalanceSheet({
             </div>
           </div>
 
-          {/* Equity */}
-          <div className="px-5 py-4 border-b border-border/50 flex-1">
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs font-display font-medium text-muted-foreground uppercase tracking-wider">Equity</span>
-            </div>
-
+          {/* Equity — collapsible */}
+          <CollapsibleSection
+            icon={<TrendingUp className="h-3.5 w-3.5 text-primary" />}
+            title="Equity"
+            subtotal={fmtFull(nav_AC)}
+            defaultOpen
+          >
             <div className="space-y-1.5">
               <div className="flex justify-between text-sm">
                 <span className="font-mono text-muted-foreground">LP Invested Capital</span>
@@ -572,15 +614,10 @@ export function VaultBalanceSheet({
                 <span className="font-mono text-foreground">{shares.totalSharesOutstanding.toLocaleString()}</span>
               </div>
             </div>
-          </div>
+          </CollapsibleSection>
 
-          {/* Balance check */}
-          <div className="px-5 py-3 mt-auto bg-accent/5 border-t border-accent/20">
-            <div className="flex items-center justify-between text-sm font-semibold">
-              <span className="font-display text-foreground">TOTAL LIABILITIES + EQUITY</span>
-              <span className="font-mono text-accent text-lg">{fmtFull(totalAssets_AC)}</span>
-            </div>
-          </div>
+          {/* Spacer */}
+          <div className="flex-1" />
         </div>
       </div>
 
