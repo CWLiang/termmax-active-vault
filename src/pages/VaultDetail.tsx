@@ -646,7 +646,7 @@ function WithdrawPanel() {
 export default function VaultDetailPage() {
   const { vaultId } = useParams();
   const navigate = useNavigate();
-  const [strategyExpanded, setStrategyExpanded] = useState(false);
+
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
