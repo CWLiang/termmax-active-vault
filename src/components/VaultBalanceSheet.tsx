@@ -113,7 +113,7 @@ export function VaultBalanceSheet({
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-border bg-card px-5 py-3"
+        className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3 rounded-xl border border-border bg-card px-6 py-4"
       >
         {[
           { label: "TVL", value: fmt(totalAssets), accent: false },
@@ -122,10 +122,10 @@ export function VaultBalanceSheet({
           { label: "NAV/Share", value: `$${navPerShare.toFixed(4)}`, accent: false },
           { label: "Est. Net APY", value: pctShort(estNetAPY), accent: true },
         ].map((item) => (
-          <div key={item.label} className="flex items-baseline gap-2">
-            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">{item.label}</span>
+          <div key={item.label} className="flex flex-col items-center gap-0.5">
+            <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-wider">{item.label}</span>
             <span className={cn(
-              "text-sm font-display font-bold",
+              "text-xl font-display font-bold",
               item.accent ? "text-primary" : "text-foreground"
             )}>{item.value}</span>
           </div>
