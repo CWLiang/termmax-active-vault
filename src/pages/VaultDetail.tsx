@@ -635,6 +635,22 @@ export default function VaultDetailPage() {
               <h1 className="text-2xl font-display font-bold text-foreground">{VAULT_DATA.name}</h1>
               <TooltipProvider>
                 <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button onClick={() => copyToClipboard(VAULT_DATA.contractAddress)}
+                      className="flex items-center gap-1 text-xs font-mono text-muted-foreground bg-secondary px-2 py-0.5 rounded hover:text-foreground transition-colors cursor-pointer">
+                      {truncateAddress(VAULT_DATA.contractAddress)}
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="text-xs">Click to copy address</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <a href={`https://etherscan.io/address/${VAULT_DATA.contractAddress}`} target="_blank" rel="noopener noreferrer"
+                className="text-muted-foreground hover:text-primary transition-colors">
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+              <TooltipProvider>
+                <Tooltip>
                   <TooltipTrigger>
                     <span className="text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded cursor-help">
                       Leveraged RWA
@@ -788,19 +804,36 @@ export default function VaultDetailPage() {
             <div className="space-y-2">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-muted-foreground">Vault</span>
-                <span className="font-mono text-primary flex items-center gap-1 cursor-pointer hover:underline">
-                  {truncateAddress(VAULT_DATA.contractAddress)} <ExternalLink className="h-3 w-3" />
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => copyToClipboard(VAULT_DATA.contractAddress)}
+                    className="text-muted-foreground hover:text-foreground transition-colors">
+                    <Copy className="h-3 w-3" />
+                  </button>
+                  <a href={`https://etherscan.io/address/${VAULT_DATA.contractAddress}`} target="_blank" rel="noopener noreferrer"
+                    className="font-mono text-primary hover:underline inline-flex items-center gap-1">
+                    {truncateAddress(VAULT_DATA.contractAddress)} <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-muted-foreground">Strategy</span>
-                <span className="font-mono text-primary flex items-center gap-1 cursor-pointer hover:underline">
-                  {truncateAddress(VAULT_DATA.strategyContract)} <ExternalLink className="h-3 w-3" />
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <button onClick={() => copyToClipboard(VAULT_DATA.strategyContract)}
+                    className="text-muted-foreground hover:text-foreground transition-colors">
+                    <Copy className="h-3 w-3" />
+                  </button>
+                  <a href={`https://etherscan.io/address/${VAULT_DATA.strategyContract}`} target="_blank" rel="noopener noreferrer"
+                    className="font-mono text-primary hover:underline inline-flex items-center gap-1">
+                    {truncateAddress(VAULT_DATA.strategyContract)} <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
               </div>
             </div>
             <div className="text-xs text-muted-foreground flex items-center gap-1 pt-1">
-              <Shield className="h-3 w-3 text-buffer-safe" /> Audited by {VAULT_DATA.auditor}
+              <Shield className="h-3 w-3 text-buffer-safe" /> Audited by{" "}
+              <a href={VAULT_DATA.auditUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                {VAULT_DATA.auditor}
+              </a>
             </div>
           </div>
         </motion.div>
