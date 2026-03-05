@@ -105,13 +105,12 @@ const ALLOCATION_DATA: AllocationItem[] = [
 
 const CATEGORY_META: Record<AllocationCategory, { label: string }> = {
   RWA: { label: "RWA" },
-  Yield: { label: "Yield" },
   Loan: { label: "Loan" },
   "Instant Liquidity": { label: "Instant Liquidity" },
 };
 
 // Assets only (exclude Loan) for pie chart
-const ASSET_CATEGORIES: AllocationCategory[] = ["RWA", "Yield", "Instant Liquidity"];
+const ASSET_CATEGORIES: AllocationCategory[] = ["RWA", "Instant Liquidity"];
 const LOAN_DATA = ALLOCATION_DATA.filter((d) => d.category === "Loan");
 
 const PIE_DATA = Object.entries(
