@@ -632,10 +632,6 @@ export default function VaultDetailPage() {
 
           {/* 2. Portfolio — Asset Allocation */}
           <PortfolioSection />
-
-          {/* 2b. Outstanding Loans */}
-          <LoanSection />
-
           {/* 3. Redemption Capacity (visual) */}
           <RedemptionCapacity />
 
