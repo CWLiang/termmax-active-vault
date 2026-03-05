@@ -150,23 +150,19 @@ function copyToClipboard(text: string) {
   toast.success("Address copied to clipboard");
 }
 
-// --- Factsheet Section ---
-function FactsheetSection() {
+// --- Vault Details Section ---
+function VaultDetailsSection() {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
       className="rounded-xl border border-border bg-card p-5 space-y-1">
       <div className="flex items-center gap-2 mb-3">
         <FileText className="h-4 w-4 text-muted-foreground" />
-        <h3 className="font-display font-semibold text-foreground">Factsheet</h3>
+        <h3 className="font-display font-semibold text-foreground">Vault Details</h3>
       </div>
       <Table>
         <TableBody>
           <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0 w-40">Strategy</TableCell>
-            <TableCell className="text-foreground text-sm py-2.5 px-0">{VAULT_DATA.strategy}</TableCell>
-          </TableRow>
-          <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Yield Type</TableCell>
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0 w-40">Yield Type</TableCell>
             <TableCell className="text-foreground text-sm py-2.5 px-0">{VAULT_DATA.yieldType}</TableCell>
           </TableRow>
           <TableRow className="border-border">
