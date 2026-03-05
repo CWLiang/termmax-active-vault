@@ -733,28 +733,8 @@ export default function VaultDetailPage() {
           {/* 2. Portfolio — Asset Allocation */}
           <PortfolioSection />
 
-          {/* 4. Strategy (text, expandable) */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="rounded-xl border border-border bg-card p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-display font-semibold text-foreground">Strategy</h3>
-              <button onClick={() => setStrategyExpanded(!strategyExpanded)}
-                className="text-xs text-primary flex items-center gap-1 hover:underline">
-                {strategyExpanded ? "Less" : "Details"}
-                {strategyExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              </button>
-            </div>
-            <p className="text-sm text-muted-foreground">{VAULT_DATA.strategy}</p>
-            <AnimatePresence>
-              {strategyExpanded && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden">
-                  <div className="pt-3 border-t border-border">
-                    <p className="text-sm text-muted-foreground leading-relaxed">{VAULT_DATA.strategyDetail}</p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+
+
 
           {/* 5. Vault Details */}
           <VaultDetailsSection />
