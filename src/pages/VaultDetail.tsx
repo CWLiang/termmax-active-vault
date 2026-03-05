@@ -736,8 +736,8 @@ export default function VaultDetailPage() {
             </AnimatePresence>
           </motion.div>
 
-          {/* 5. Factsheet (structured details) */}
-          <FactsheetSection />
+          {/* 5. Vault Details */}
+          <VaultDetailsSection />
 
           {/* 6. On-chain Activity Log */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="rounded-xl border border-border bg-card p-5">
