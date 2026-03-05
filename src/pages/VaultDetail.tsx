@@ -645,18 +645,6 @@ export default function VaultDetailPage() {
                 className="text-muted-foreground hover:text-primary transition-colors">
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <span className="text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded cursor-help">
-                      Leveraged RWA
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent className="text-xs max-w-xs">
-                    This vault uses RWA collateral with fixed-rate leverage. Principal is subject to market and smart contract risk.
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Shield className="h-4 w-4" />
