@@ -10,6 +10,7 @@ import {
   PieChart as PieChartIcon, Activity, ExternalLink, Info, FileText, Lock, Copy
 } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid } from "recharts";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
@@ -67,11 +68,54 @@ const APY_MAP: Record<string, number> = {
   "90d": VAULT_DATA.apy90d,
 };
 
-const ALLOCATION_DATA = [
-  { name: "OUSG (RWA)", value: 62, amount: 7750000, color: "hsl(187, 100%, 50%)" },
-  { name: "TermMax FT", value: 23, amount: 2875000, color: "hsl(40, 90%, 55%)" },
-  { name: "Cash Buffer", value: 15, amount: 1875000, color: "hsl(215, 15%, 55%)" },
+type RateType = "fixed" | "variable" | null;
+type AllocationCategory = "RWA" | "Yield" | "Loan" | "Cash";
+
+interface AllocationItem {
+  name: string;
+  protocol: string;
+  category: AllocationCategory;
+  rateType: RateType;
+  value: number;
+  amount: number;
+  color: string;
+}
+
+const ALLOCATION_DATA: AllocationItem[] = [
+  // RWA
+  { name: "OUSG", protocol: "Ondo Finance", category: "RWA", rateType: null, value: 42, amount: 5250000, color: "hsl(187, 100%, 50%)" },
+  { name: "DigiFT Treasury", protocol: "DigiFT", category: "RWA", rateType: null, value: 12, amount: 1500000, color: "hsl(187, 70%, 40%)" },
+  // Yield — Variable
+  { name: "USDC Supply", protocol: "Morpho", category: "Yield", rateType: "variable", value: 8, amount: 1000000, color: "hsl(270, 70%, 55%)" },
+  // Yield — Fixed
+  { name: "FT-USDC-Jun26", protocol: "TermMax", category: "Yield", rateType: "fixed", value: 10, amount: 1250000, color: "hsl(40, 90%, 55%)" },
+  { name: "PT-sUSDe-Mar26", protocol: "Pendle", category: "Yield", rateType: "fixed", value: 6, amount: 750000, color: "hsl(40, 70%, 45%)" },
+  // Loan — Variable
+  { name: "USDC Borrow", protocol: "AAVE", category: "Loan", rateType: "variable", value: 5, amount: 625000, color: "hsl(0, 70%, 55%)" },
+  // Loan — Fixed
+  { name: "GT-USDC-Jun26", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 2, amount: 250000, color: "hsl(0, 50%, 45%)" },
+  // Cash
+  { name: "Cash Buffer", protocol: "Vault", category: "Cash", rateType: null, value: 15, amount: 1875000, color: "hsl(215, 15%, 55%)" },
 ];
+
+const CATEGORY_META: Record<AllocationCategory, { label: string; icon: string }> = {
+  RWA: { label: "RWA Holdings", icon: "🏛" },
+  Yield: { label: "Yield Positions", icon: "📈" },
+  Loan: { label: "Loan Positions", icon: "💸" },
+  Cash: { label: "Cash", icon: "💵" },
+};
+
+// Group for pie chart (by category)
+const PIE_DATA = Object.entries(
+  ALLOCATION_DATA.reduce((acc, item) => {
+    acc[item.category] = (acc[item.category] || 0) + item.value;
+    return acc;
+  }, {} as Record<string, number>)
+).map(([name, value]) => ({
+  name,
+  value,
+  color: ALLOCATION_DATA.find((d) => d.category === name)?.color || "hsl(215, 15%, 55%)",
+}));
 
 const MOCK_ACTIONS = [
   { time: "2h ago", type: "RWA Purchase", tx: "0x1a2b...3c4d" },
@@ -209,41 +253,82 @@ function RedemptionCapacity() {
   );
 }
 
+// --- Rate Type Badge ---
+function RateTypeBadge({ type }: { type: RateType }) {
+  if (!type) return null;
+  return (
+    <span className={cn(
+      "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold font-mono uppercase tracking-wider",
+      type === "fixed"
+        ? "bg-primary/15 text-primary border border-primary/20"
+        : "bg-accent/15 text-accent-foreground border border-accent/30"
+    )}>
+      {type}
+    </span>
+  );
+}
+
 // --- Transparency / Asset Allocation ---
 function TransparencySection() {
+  const categories: AllocationCategory[] = ["RWA", "Yield", "Loan", "Cash"];
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
       className="rounded-xl border border-border bg-card p-5">
       <h3 className="font-display font-semibold text-foreground mb-4">Transparency — Asset Allocation</h3>
-      <div className="flex flex-col sm:flex-row items-center gap-6">
-        <div className="w-40 h-40">
+      <div className="flex flex-col sm:flex-row items-start gap-6">
+        {/* Pie chart by category */}
+        <div className="w-40 h-40 flex-shrink-0 self-center">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={ALLOCATION_DATA} innerRadius={42} outerRadius={65} dataKey="value" strokeWidth={2} stroke="hsl(220, 18%, 10%)">
-                {ALLOCATION_DATA.map((entry, i) => (
+              <Pie data={PIE_DATA} innerRadius={42} outerRadius={65} dataKey="value" strokeWidth={2} stroke="hsl(220, 18%, 10%)">
+                {PIE_DATA.map((entry, i) => (
                   <Cell key={i} fill={entry.color} />
                 ))}
               </Pie>
             </PieChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex-1 w-full">
-          <Table>
-            <TableBody>
-              {ALLOCATION_DATA.map((item, i) => (
-                <TableRow key={i} className="border-border">
-                  <TableCell className="py-2.5 px-0">
-                    <span className="flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-sm" style={{ background: item.color }} />
-                      <span className="text-sm text-foreground">{item.name}</span>
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm text-foreground py-2.5 px-0">{item.value}%</TableCell>
-                  <TableCell className="text-right font-mono text-sm text-muted-foreground py-2.5 px-0">{formatUSD(item.amount)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+
+        {/* Categorized breakdown */}
+        <div className="flex-1 w-full space-y-4">
+          {categories.map((cat) => {
+            const items = ALLOCATION_DATA.filter((d) => d.category === cat);
+            if (items.length === 0) return null;
+            const meta = CATEGORY_META[cat];
+            const catTotal = items.reduce((s, i) => s + i.value, 0);
+            const catAmount = items.reduce((s, i) => s + i.amount, 0);
+
+            return (
+              <div key={cat}>
+                {/* Category header */}
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <span>{meta.icon}</span> {meta.label}
+                  </span>
+                  <span className="text-xs font-mono text-muted-foreground">{catTotal}% · {formatUSD(catAmount)}</span>
+                </div>
+
+                {/* Items */}
+                <div className="space-y-0">
+                  {items.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: item.color }} />
+                        <span className="text-sm text-foreground">{item.name}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono">{item.protocol}</span>
+                        <RateTypeBadge type={item.rateType} />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-sm text-foreground">{item.value}%</span>
+                        <span className="font-mono text-xs text-muted-foreground w-16 text-right">{formatUSD(item.amount)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </motion.div>
