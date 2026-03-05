@@ -676,33 +676,36 @@ export default function VaultDetailPage() {
 
         {/* Right: Deposit/Withdraw Panel */}
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }} className="space-y-6">
-          {/* My Position — compact deposited display */}
-          <div className="rounded-xl border border-primary/20 bg-card p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">My Position</span>
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-lg font-display font-bold text-foreground">10,000.00</span>
-                <span className="text-xs font-mono text-muted-foreground">USDC</span>
+          <div className="rounded-xl border border-border bg-card sticky top-6 overflow-hidden">
+            {/* My Position — integrated header */}
+            <div className="px-5 pt-4 pb-3 border-b border-border bg-secondary/30">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">My Position</span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xl font-display font-bold text-foreground">10,000.00</span>
+                  <span className="text-xs font-mono text-muted-foreground">USDC</span>
+                </div>
+              </div>
+              <div className="flex justify-end mt-0.5">
+                <span className="text-[10px] font-mono text-muted-foreground">≈ $10,000.00</span>
               </div>
             </div>
-            <div className="flex justify-end mt-0.5">
-              <span className="text-[10px] font-mono text-muted-foreground">≈ $10,000.00</span>
-            </div>
-          </div>
 
-          <div className="rounded-xl border border-border bg-card p-5 sticky top-6">
-            <Tabs defaultValue="deposit">
-              <TabsList className="w-full bg-secondary mb-4">
-                <TabsTrigger value="deposit" className="flex-1 font-mono text-xs">
-                  <ArrowDownToLine className="h-3.5 w-3.5 mr-1.5" /> Deposit
-                </TabsTrigger>
-                <TabsTrigger value="withdraw" className="flex-1 font-mono text-xs">
-                  <ArrowUpFromLine className="h-3.5 w-3.5 mr-1.5" /> Withdraw
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="deposit"><DepositPanel /></TabsContent>
-              <TabsContent value="withdraw"><WithdrawPanel /></TabsContent>
-            </Tabs>
+            {/* Deposit / Withdraw tabs */}
+            <div className="p-5">
+              <Tabs defaultValue="deposit">
+                <TabsList className="w-full bg-secondary mb-4">
+                  <TabsTrigger value="deposit" className="flex-1 font-mono text-xs">
+                    <ArrowDownToLine className="h-3.5 w-3.5 mr-1.5" /> Deposit
+                  </TabsTrigger>
+                  <TabsTrigger value="withdraw" className="flex-1 font-mono text-xs">
+                    <ArrowUpFromLine className="h-3.5 w-3.5 mr-1.5" /> Withdraw
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="deposit"><DepositPanel /></TabsContent>
+                <TabsContent value="withdraw"><WithdrawPanel /></TabsContent>
+              </Tabs>
+            </div>
           </div>
 
           {/* Contract Info */}
