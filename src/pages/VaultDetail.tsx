@@ -342,13 +342,15 @@ function PortfolioSection() {
     </div>
   );
 
+  const [strategyExpanded, setStrategyExpanded] = useState(false);
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
       className="rounded-xl border border-border bg-card p-5">
       <h3 className="font-display font-semibold text-foreground mb-5">Portfolio — Asset Allocation</h3>
 
       {/* NAV Summary Bar */}
-      <div className="rounded-lg bg-secondary/50 border border-border p-4 mb-6">
+      <div className="rounded-lg bg-secondary/50 border border-border p-4 mb-4">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
             <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Total Assets</div>
@@ -363,6 +365,27 @@ function PortfolioSection() {
             <div className="text-lg font-mono font-bold text-primary">{formatUSD(nav)}</div>
           </div>
         </div>
+      </div>
+
+      {/* Strategy — collapsible */}
+      <div className="mb-6 px-1">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Strategy</span>
+          <button onClick={() => setStrategyExpanded(!strategyExpanded)}
+            className="text-[11px] text-primary flex items-center gap-1 hover:underline">
+            {strategyExpanded ? "Less" : "Details"}
+            {strategyExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground leading-relaxed">{VAULT_DATA.strategy}</p>
+        <AnimatePresence>
+          {strategyExpanded && (
+            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden">
+              <p className="text-sm text-muted-foreground leading-relaxed mt-2">{VAULT_DATA.strategyDetail}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className="flex flex-col sm:flex-row items-start gap-8">
