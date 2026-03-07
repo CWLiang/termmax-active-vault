@@ -671,7 +671,7 @@ export default function VaultDetailPage() {
         ← Back to Vaults
       </button>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left: Vault Info (2 cols) */}
         <div className="lg:col-span-2 space-y-6">
           {/* Header with Share Price */}
@@ -788,8 +788,8 @@ export default function VaultDetailPage() {
         </div>
 
         {/* Right: Deposit/Withdraw Panel */}
-        <div className="lg:col-span-1">
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }} className="sticky top-0 space-y-6">
+        <div>
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }} className="sticky top-6 space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto">
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             {/* My Position — integrated header */}
             <div className="px-5 pt-4 pb-3 border-b border-border bg-secondary/30">
