@@ -822,6 +822,7 @@ export default function VaultDetailPage() {
             </div>
           </div>
         </motion.div>
+        </div>
       </div>
     </div>
   );
