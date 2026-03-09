@@ -73,10 +73,8 @@ export default function VaultListPage() {
   const [isWalletConnected] = useState(true);
   const [positionsExpanded, setPositionsExpanded] = useState(true);
 
-  const totalDepositedUSDC = MOCK_USER_POSITIONS.reduce((s, p) => s + p.depositedUSDC, 0);
-  const totalDepositedUSD = MOCK_USER_POSITIONS.reduce((s, p) => s + p.depositedUSD, 0);
-  const totalPnl = MOCK_USER_POSITIONS.reduce((s, p) => s + p.pnl, 0);
-  const totalPnlPercent = totalDepositedUSDC > 0 ? (totalPnl / totalDepositedUSDC) * 100 : 0;
+  const totalRedeemableUSDC = MOCK_USER_POSITIONS.reduce((s, p) => s + p.redeemableUSDC, 0);
+  const totalRedeemableUSD = MOCK_USER_POSITIONS.reduce((s, p) => s + p.redeemableUSD, 0);
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
