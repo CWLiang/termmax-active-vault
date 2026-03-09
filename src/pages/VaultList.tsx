@@ -63,9 +63,22 @@ function formatUSD(value: number) {
   return `$${value.toFixed(0)}`;
 }
 
+function formatUSDExact(value: number) {
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export default function VaultListPage() {
   const navigate = useNavigate();
   const totalTVL = MOCK_VAULTS.reduce((s, v) => s + v.tvl, 0);
+
+  // Mock wallet connection state — toggle to preview
+  const [isWalletConnected] = useState(true);
+  const [positionsExpanded, setPositionsExpanded] = useState(true);
+
+  const totalDeposited = MOCK_USER_POSITIONS.reduce((s, p) => s + p.deposited, 0);
+  const totalCurrentValue = MOCK_USER_POSITIONS.reduce((s, p) => s + p.currentValue, 0);
+  const totalPnl = totalCurrentValue - totalDeposited;
+  const totalPnlPercent = totalDeposited > 0 ? (totalPnl / totalDeposited) * 100 : 0;
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
