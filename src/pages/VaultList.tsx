@@ -132,16 +132,9 @@ export default function VaultListPage() {
             </div>
             <div className="flex items-center gap-6">
               <div className="text-right">
-                <div className="text-xs text-muted-foreground font-mono">Total Deposited</div>
-                <div className="text-lg font-display font-bold text-foreground">{totalDepositedUSDC.toLocaleString()} USDC</div>
-                <div className="text-xs text-muted-foreground font-mono">≈ {formatUSDExact(totalDepositedUSD)}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs text-muted-foreground font-mono">Total P&L</div>
-                <div className={`text-lg font-display font-bold ${totalPnl >= 0 ? "text-yield-positive" : "text-yield-negative"}`}>
-                  {totalPnl >= 0 ? "+" : ""}{formatUSDExact(totalPnl)}
-                  <span className="text-xs font-mono ml-1">({totalPnlPercent.toFixed(2)}%)</span>
-                </div>
+                <div className="text-xs text-muted-foreground font-mono">Total Redeemable</div>
+                <div className="text-lg font-display font-bold text-foreground">{totalRedeemableUSDC.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC</div>
+                <div className="text-xs text-muted-foreground font-mono">≈ {formatUSDExact(totalRedeemableUSD)}</div>
               </div>
               {positionsExpanded ? (
                 <ChevronUp className="h-4 w-4 text-muted-foreground" />
