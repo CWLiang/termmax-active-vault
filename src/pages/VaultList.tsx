@@ -110,7 +110,104 @@ export default function VaultListPage() {
         <StatCard label="Active Vaults" value="2" icon={<Users className="h-4 w-4" />} />
       </motion.div>
 
-      {/* Vault Cards */}
+      {/* My Positions — visible when wallet connected */}
+      {isWalletConnected && MOCK_USER_POSITIONS.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="rounded-xl border border-primary/20 bg-card overflow-hidden"
+        >
+          {/* Header */}
+          <button
+            onClick={() => setPositionsExpanded(!positionsExpanded)}
+            className="w-full flex items-center justify-between p-5 hover:bg-muted/30 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Wallet className="h-4 w-4 text-primary" />
+              </div>
+              <div className="text-left">
+                <h2 className="text-base font-display font-bold text-foreground">My Positions</h2>
+                <p className="text-xs text-muted-foreground font-mono">
+                  {MOCK_USER_POSITIONS.length} vault{MOCK_USER_POSITIONS.length > 1 ? "s" : ""}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground font-mono">Total Value</div>
+                <div className="text-lg font-display font-bold text-foreground">{formatUSDExact(totalCurrentValue)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground font-mono">Total P&L</div>
+                <div className={`text-lg font-display font-bold ${totalPnl >= 0 ? "text-yield-positive" : "text-yield-negative"}`}>
+                  {totalPnl >= 0 ? "+" : ""}{formatUSDExact(totalPnl)}
+                  <span className="text-xs font-mono ml-1">({totalPnlPercent.toFixed(2)}%)</span>
+                </div>
+              </div>
+              {positionsExpanded ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </div>
+          </button>
+
+          {/* Position Rows */}
+          <AnimatePresence>
+            {positionsExpanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="overflow-hidden"
+              >
+                <div className="border-t border-border">
+                  {MOCK_USER_POSITIONS.map((pos) => (
+                    <div
+                      key={pos.vaultId}
+                      className="flex items-center justify-between px-5 py-4 hover:bg-muted/20 transition-colors cursor-pointer border-b border-border last:border-b-0"
+                      onClick={() => navigate(`/vault/${pos.vaultId}`)}
+                    >
+                      <div className="flex-1">
+                        <div className="font-display font-semibold text-foreground text-sm">{pos.vaultName}</div>
+                        <div className="text-xs text-muted-foreground font-mono">
+                          {pos.shares.toLocaleString()} shares
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-8">
+                        <div className="text-right">
+                          <div className="text-xs text-muted-foreground font-mono">Deposited</div>
+                          <div className="text-sm font-mono text-foreground">{formatUSDExact(pos.deposited)}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-muted-foreground font-mono">Current Value</div>
+                          <div className="text-sm font-mono text-foreground">{formatUSDExact(pos.currentValue)}</div>
+                        </div>
+                        <div className="text-right min-w-[100px]">
+                          <div className="text-xs text-muted-foreground font-mono">P&L</div>
+                          <div className={`text-sm font-mono ${pos.pnl >= 0 ? "text-yield-positive" : "text-yield-negative"}`}>
+                            {pos.pnl >= 0 ? "+" : ""}{formatUSDExact(pos.pnl)}
+                            <span className="text-xs ml-1">({pos.pnlPercent.toFixed(2)}%)</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-muted-foreground font-mono">APY</div>
+                          <div className="text-sm font-mono text-primary">{pos.apy7d}%</div>
+                        </div>
+                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      )}
+
       <div className="space-y-4">
         {MOCK_VAULTS.map((vault, i) => (
           <motion.div
