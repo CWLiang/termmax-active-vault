@@ -1,9 +1,10 @@
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
 import { Gauge } from "@/components/ui/gauge";
-import { TrendingUp, Users, DollarSign, ArrowRight, Shield, Clock } from "lucide-react";
+import { TrendingUp, Users, DollarSign, ArrowRight, Shield, Clock, Wallet, ChevronDown, ChevronUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 const MOCK_VAULTS = [
   {
