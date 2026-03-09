@@ -1,9 +1,10 @@
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
 import { Gauge } from "@/components/ui/gauge";
-import { TrendingUp, Users, DollarSign, ArrowRight, Shield, Clock } from "lucide-react";
+import { TrendingUp, Users, DollarSign, ArrowRight, Shield, Clock, Wallet, ChevronDown, ChevronUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 const MOCK_VAULTS = [
   {
@@ -15,7 +16,7 @@ const MOCK_VAULTS = [
     apy30d: 9.5,
     tvl: 27_396_699,
     capacity: 50_000_000,
-    bufferRatio: 10.9, // (cash + lending) / NAV ≈ 4.27M / 39M total ≈ 10.9% of total assets as liquid
+    bufferRatio: 10.9,
     riskLevel: "Medium",
   },
   {
@@ -32,15 +33,52 @@ const MOCK_VAULTS = [
   },
 ];
 
+// Mock user positions (shown when wallet connected)
+const MOCK_USER_POSITIONS = [
+  {
+    vaultId: "vault-1",
+    vaultName: "RWA Enhanced Yield",
+    deposited: 15_230,
+    currentValue: 15_892,
+    pnl: 662,
+    pnlPercent: 4.35,
+    shares: 14_850.32,
+    apy7d: 9.8,
+  },
+  {
+    vaultId: "vault-2",
+    vaultName: "T-Bill Maximizer",
+    deposited: 50_000,
+    currentValue: 51_280,
+    pnl: 1_280,
+    pnlPercent: 2.56,
+    shares: 49_720.15,
+    apy7d: 6.18,
+  },
+];
+
 function formatUSD(value: number) {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
   return `$${value.toFixed(0)}`;
 }
 
+function formatUSDExact(value: number) {
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export default function VaultListPage() {
   const navigate = useNavigate();
   const totalTVL = MOCK_VAULTS.reduce((s, v) => s + v.tvl, 0);
+
+  // Mock wallet connection state — toggle to preview
+  const [isWalletConnected] = useState(true);
+  const [positionsExpanded, setPositionsExpanded] = useState(true);
+
+  const totalDeposited = MOCK_USER_POSITIONS.reduce((s, p) => s + p.deposited, 0);
+  const totalCurrentValue = MOCK_USER_POSITIONS.reduce((s, p) => s + p.currentValue, 0);
+  const totalPnl = totalCurrentValue - totalDeposited;
+  const totalPnlPercent = totalDeposited > 0 ? (totalPnl / totalDeposited) * 100 : 0;
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
@@ -72,7 +110,104 @@ export default function VaultListPage() {
         <StatCard label="Active Vaults" value="2" icon={<Users className="h-4 w-4" />} />
       </motion.div>
 
-      {/* Vault Cards */}
+      {/* My Positions — visible when wallet connected */}
+      {isWalletConnected && MOCK_USER_POSITIONS.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="rounded-xl border border-primary/20 bg-card overflow-hidden"
+        >
+          {/* Header */}
+          <button
+            onClick={() => setPositionsExpanded(!positionsExpanded)}
+            className="w-full flex items-center justify-between p-5 hover:bg-muted/30 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Wallet className="h-4 w-4 text-primary" />
+              </div>
+              <div className="text-left">
+                <h2 className="text-base font-display font-bold text-foreground">My Positions</h2>
+                <p className="text-xs text-muted-foreground font-mono">
+                  {MOCK_USER_POSITIONS.length} vault{MOCK_USER_POSITIONS.length > 1 ? "s" : ""}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground font-mono">Total Value</div>
+                <div className="text-lg font-display font-bold text-foreground">{formatUSDExact(totalCurrentValue)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground font-mono">Total P&L</div>
+                <div className={`text-lg font-display font-bold ${totalPnl >= 0 ? "text-yield-positive" : "text-yield-negative"}`}>
+                  {totalPnl >= 0 ? "+" : ""}{formatUSDExact(totalPnl)}
+                  <span className="text-xs font-mono ml-1">({totalPnlPercent.toFixed(2)}%)</span>
+                </div>
+              </div>
+              {positionsExpanded ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </div>
+          </button>
+
+          {/* Position Rows */}
+          <AnimatePresence>
+            {positionsExpanded && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="overflow-hidden"
+              >
+                <div className="border-t border-border">
+                  {MOCK_USER_POSITIONS.map((pos) => (
+                    <div
+                      key={pos.vaultId}
+                      className="flex items-center justify-between px-5 py-4 hover:bg-muted/20 transition-colors cursor-pointer border-b border-border last:border-b-0"
+                      onClick={() => navigate(`/vault/${pos.vaultId}`)}
+                    >
+                      <div className="flex-1">
+                        <div className="font-display font-semibold text-foreground text-sm">{pos.vaultName}</div>
+                        <div className="text-xs text-muted-foreground font-mono">
+                          {pos.shares.toLocaleString()} shares
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-8">
+                        <div className="text-right">
+                          <div className="text-xs text-muted-foreground font-mono">Deposited</div>
+                          <div className="text-sm font-mono text-foreground">{formatUSDExact(pos.deposited)}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-muted-foreground font-mono">Current Value</div>
+                          <div className="text-sm font-mono text-foreground">{formatUSDExact(pos.currentValue)}</div>
+                        </div>
+                        <div className="text-right min-w-[100px]">
+                          <div className="text-xs text-muted-foreground font-mono">P&L</div>
+                          <div className={`text-sm font-mono ${pos.pnl >= 0 ? "text-yield-positive" : "text-yield-negative"}`}>
+                            {pos.pnl >= 0 ? "+" : ""}{formatUSDExact(pos.pnl)}
+                            <span className="text-xs ml-1">({pos.pnlPercent.toFixed(2)}%)</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-muted-foreground font-mono">APY</div>
+                          <div className="text-sm font-mono text-primary">{pos.apy7d}%</div>
+                        </div>
+                        <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      )}
+
       <div className="space-y-4">
         {MOCK_VAULTS.map((vault, i) => (
           <motion.div
