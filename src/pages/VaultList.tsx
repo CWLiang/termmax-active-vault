@@ -38,8 +38,8 @@ const MOCK_USER_POSITIONS = [
   {
     vaultId: "vault-1",
     vaultName: "RWA Enhanced Yield",
-    deposited: 15_230,
-    currentValue: 15_892,
+    depositedUSDC: 15_230,
+    depositedUSD: 15_226.18,
     pnl: 662,
     pnlPercent: 4.35,
     shares: 14_850.32,
@@ -48,8 +48,8 @@ const MOCK_USER_POSITIONS = [
   {
     vaultId: "vault-2",
     vaultName: "T-Bill Maximizer",
-    deposited: 50_000,
-    currentValue: 51_280,
+    depositedUSDC: 50_000,
+    depositedUSD: 49_985.50,
     pnl: 1_280,
     pnlPercent: 2.56,
     shares: 49_720.15,
