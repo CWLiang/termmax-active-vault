@@ -136,8 +136,9 @@ export default function VaultListPage() {
             </div>
             <div className="flex items-center gap-6">
               <div className="text-right">
-                <div className="text-xs text-muted-foreground font-mono">Total Value</div>
-                <div className="text-lg font-display font-bold text-foreground">{formatUSDExact(totalCurrentValue)}</div>
+                <div className="text-xs text-muted-foreground font-mono">Total Deposited</div>
+                <div className="text-lg font-display font-bold text-foreground">{totalDepositedUSDC.toLocaleString()} USDC</div>
+                <div className="text-xs text-muted-foreground font-mono">≈ {formatUSDExact(totalDepositedUSD)}</div>
               </div>
               <div className="text-right">
                 <div className="text-xs text-muted-foreground font-mono">Total P&L</div>
