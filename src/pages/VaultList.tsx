@@ -163,15 +163,14 @@ export default function VaultListPage() {
                     >
                       <div className="flex-1">
                         <div className="font-display font-semibold text-foreground text-sm">{pos.vaultName}</div>
-                        <div className="text-xs text-muted-foreground font-mono">
-                          {pos.shares.toLocaleString()} shares × {pos.pricePerShare.toFixed(4)} USDC
-                        </div>
                       </div>
                       <div className="flex items-center gap-8">
                         <div className="text-right">
                           <div className="text-xs text-muted-foreground font-mono">Redeemable</div>
                           <div className="text-sm font-mono text-foreground font-semibold">{pos.redeemableUSDC.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC</div>
-                          <div className="text-xs font-mono text-muted-foreground">≈ {formatUSDExact(pos.redeemableUSD)}</div>
+                          <div className="text-xs font-mono text-muted-foreground">
+                            {pos.shares.toLocaleString()} shares × {pos.pricePerShare.toFixed(4)} ≈ {formatUSDExact(pos.redeemableUSD)}
+                          </div>
                         </div>
                         <div className="text-right">
                           <div className="text-xs text-muted-foreground font-mono">APY</div>
