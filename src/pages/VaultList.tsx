@@ -203,9 +203,6 @@ export default function VaultListPage() {
                     <h2 className="text-xl font-display font-bold text-foreground group-hover:text-primary transition-colors">
                       {vault.name}
                     </h2>
-                    <span className="text-xs font-mono bg-secondary text-secondary-foreground px-2 py-0.5 rounded">
-                      {vault.riskLevel}
-                    </span>
                   </div>
                   <p className="text-sm text-muted-foreground">{vault.strategy}</p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
