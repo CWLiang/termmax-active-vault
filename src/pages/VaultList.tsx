@@ -38,8 +38,8 @@ const MOCK_USER_POSITIONS = [
   {
     vaultId: "vault-1",
     vaultName: "RWA Enhanced Yield",
-    deposited: 15_230,
-    currentValue: 15_892,
+    depositedUSDC: 15_230,
+    depositedUSD: 15_226.18,
     pnl: 662,
     pnlPercent: 4.35,
     shares: 14_850.32,
@@ -48,8 +48,8 @@ const MOCK_USER_POSITIONS = [
   {
     vaultId: "vault-2",
     vaultName: "T-Bill Maximizer",
-    deposited: 50_000,
-    currentValue: 51_280,
+    depositedUSDC: 50_000,
+    depositedUSD: 49_985.50,
     pnl: 1_280,
     pnlPercent: 2.56,
     shares: 49_720.15,
@@ -75,10 +75,10 @@ export default function VaultListPage() {
   const [isWalletConnected] = useState(true);
   const [positionsExpanded, setPositionsExpanded] = useState(true);
 
-  const totalDeposited = MOCK_USER_POSITIONS.reduce((s, p) => s + p.deposited, 0);
-  const totalCurrentValue = MOCK_USER_POSITIONS.reduce((s, p) => s + p.currentValue, 0);
-  const totalPnl = totalCurrentValue - totalDeposited;
-  const totalPnlPercent = totalDeposited > 0 ? (totalPnl / totalDeposited) * 100 : 0;
+  const totalDepositedUSDC = MOCK_USER_POSITIONS.reduce((s, p) => s + p.depositedUSDC, 0);
+  const totalDepositedUSD = MOCK_USER_POSITIONS.reduce((s, p) => s + p.depositedUSD, 0);
+  const totalPnl = MOCK_USER_POSITIONS.reduce((s, p) => s + p.pnl, 0);
+  const totalPnlPercent = totalDepositedUSDC > 0 ? (totalPnl / totalDepositedUSDC) * 100 : 0;
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
@@ -136,8 +136,9 @@ export default function VaultListPage() {
             </div>
             <div className="flex items-center gap-6">
               <div className="text-right">
-                <div className="text-xs text-muted-foreground font-mono">Total Value</div>
-                <div className="text-lg font-display font-bold text-foreground">{formatUSDExact(totalCurrentValue)}</div>
+                <div className="text-xs text-muted-foreground font-mono">Total Deposited</div>
+                <div className="text-lg font-display font-bold text-foreground">{totalDepositedUSDC.toLocaleString()} USDC</div>
+                <div className="text-xs text-muted-foreground font-mono">≈ {formatUSDExact(totalDepositedUSD)}</div>
               </div>
               <div className="text-right">
                 <div className="text-xs text-muted-foreground font-mono">Total P&L</div>
@@ -180,11 +181,8 @@ export default function VaultListPage() {
                       <div className="flex items-center gap-8">
                         <div className="text-right">
                           <div className="text-xs text-muted-foreground font-mono">Deposited</div>
-                          <div className="text-sm font-mono text-foreground">{formatUSDExact(pos.deposited)}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs text-muted-foreground font-mono">Current Value</div>
-                          <div className="text-sm font-mono text-foreground">{formatUSDExact(pos.currentValue)}</div>
+                          <div className="text-sm font-mono text-foreground">{pos.depositedUSDC.toLocaleString()} USDC</div>
+                          <div className="text-xs font-mono text-muted-foreground">≈ {formatUSDExact(pos.depositedUSD)}</div>
                         </div>
                         <div className="text-right min-w-[100px]">
                           <div className="text-xs text-muted-foreground font-mono">P&L</div>
