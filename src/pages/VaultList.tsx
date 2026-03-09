@@ -181,11 +181,8 @@ export default function VaultListPage() {
                       <div className="flex items-center gap-8">
                         <div className="text-right">
                           <div className="text-xs text-muted-foreground font-mono">Deposited</div>
-                          <div className="text-sm font-mono text-foreground">{formatUSDExact(pos.deposited)}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs text-muted-foreground font-mono">Current Value</div>
-                          <div className="text-sm font-mono text-foreground">{formatUSDExact(pos.currentValue)}</div>
+                          <div className="text-sm font-mono text-foreground">{pos.depositedUSDC.toLocaleString()} USDC</div>
+                          <div className="text-xs font-mono text-muted-foreground">≈ {formatUSDExact(pos.depositedUSD)}</div>
                         </div>
                         <div className="text-right min-w-[100px]">
                           <div className="text-xs text-muted-foreground font-mono">P&L</div>
