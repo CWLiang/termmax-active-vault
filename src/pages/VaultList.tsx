@@ -16,7 +16,7 @@ const MOCK_VAULTS = [
     apy30d: 9.5,
     tvl: 27_396_699,
     capacity: 50_000_000,
-    bufferRatio: 10.9, // (cash + lending) / NAV ≈ 4.27M / 39M total ≈ 10.9% of total assets as liquid
+    bufferRatio: 10.9,
     riskLevel: "Medium",
   },
   {
@@ -30,6 +30,30 @@ const MOCK_VAULTS = [
     capacity: 20_000_000,
     bufferRatio: 18.7,
     riskLevel: "Low",
+  },
+];
+
+// Mock user positions (shown when wallet connected)
+const MOCK_USER_POSITIONS = [
+  {
+    vaultId: "vault-1",
+    vaultName: "RWA Enhanced Yield",
+    deposited: 15_230,
+    currentValue: 15_892,
+    pnl: 662,
+    pnlPercent: 4.35,
+    shares: 14_850.32,
+    apy7d: 9.8,
+  },
+  {
+    vaultId: "vault-2",
+    vaultName: "T-Bill Maximizer",
+    deposited: 50_000,
+    currentValue: 51_280,
+    pnl: 1_280,
+    pnlPercent: 2.56,
+    shares: 49_720.15,
+    apy7d: 6.18,
   },
 ];
 
