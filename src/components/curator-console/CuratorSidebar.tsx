@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Eye, TrendingUp, ArrowRightLeft,
-  ArrowDownToLine, ArrowUpFromLine, FileText,
+  ArrowDownToLine, FileText,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
