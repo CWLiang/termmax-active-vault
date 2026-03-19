@@ -27,7 +27,7 @@ const depositorItems = [
 ];
 
 const curatorItems = [
-  { title: "Console", url: "/curator", icon: LayoutDashboard },
+  { title: "Console", url: "/curator-console", icon: LayoutDashboard },
 ];
 
 export function AppSidebar() {
