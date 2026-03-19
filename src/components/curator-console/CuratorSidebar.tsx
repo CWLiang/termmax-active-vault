@@ -15,7 +15,6 @@ const navItems = [
   { title: "NAV Management", url: "/curator-console/nav", icon: TrendingUp, badge: "high" },
   { title: "Redemption", url: "/curator-console/redemption", icon: ArrowRightLeft, badge: "high" },
   { title: "Deposit Vault", url: "/curator-console/deposit-vault", icon: ArrowDownToLine },
-  { title: "Redemption Vault", url: "/curator-console/redemption-vault", icon: ArrowUpFromLine },
   { title: "Audit Log", url: "/curator-console/audit-log", icon: FileText },
 ];
 
