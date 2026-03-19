@@ -128,9 +128,9 @@ export default function DepositVaultPage() {
         </CardContent>
       </Card>
 
-      {/* Withdraw Token (danger) */}
-      <Card className="bg-card border-destructive/50">
-        <CardHeader className="pb-3"><CardTitle className="font-display text-sm text-destructive">Withdraw Token (Danger Zone)</CardTitle></CardHeader>
+      {/* Withdraw Token (normal style, not danger zone) */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3"><CardTitle className="font-display text-sm">Withdraw Token</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
@@ -142,9 +142,9 @@ export default function DepositVaultPage() {
             <div><label className="text-xs text-muted-foreground">Amount</label><Input className="font-mono mt-1" placeholder="0" /></div>
             <div><label className="text-xs text-muted-foreground">Withdraw To</label><Input className="font-mono mt-1" placeholder="0x..." /></div>
           </div>
-          <Button variant="destructive" onClick={() => openConfirm("Withdraw Token")}>Withdraw</Button>
+          <Button variant="outline" onClick={() => openConfirm("Withdraw Token")}>Withdraw</Button>
           <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3 text-destructive" />
+            <AlertTriangle className="h-3 w-3 text-accent" />
             This will transfer assets directly out of the contract. Confirm before proceeding.
           </p>
         </CardContent>
