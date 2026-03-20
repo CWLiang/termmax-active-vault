@@ -52,9 +52,9 @@ export default function CuratorDashboardPage() {
                       <div className="font-mono font-semibold text-foreground">{formatUSD(v.tvl)}</div>
                     </div>
                     <div>
-                      <span className="text-muted-foreground text-xs">NAV / share</span>
+                      <span className="text-muted-foreground text-xs">NAV (USD / share)</span>
                       <div className="font-mono font-semibold text-foreground">
-                        {v.navPerShare.toFixed(4)} {v.underlyingSymbol}
+                        ${v.navPerShare.toFixed(4)}
                       </div>
                     </div>
                     <div>

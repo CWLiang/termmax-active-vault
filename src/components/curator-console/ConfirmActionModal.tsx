@@ -7,6 +7,7 @@ import { Loader2, CheckCircle2, XCircle, Copy, ExternalLink } from "lucide-react
 import { isAddress } from "viem";
 import { toast } from "sonner";
 import { getExplorerAddressUrl } from "@/lib/explorer";
+import { useAccount, useChainId, useConnect, useSwitchChain } from "wagmi";
 
 interface ConfirmActionModalProps {
   open: boolean;
@@ -106,6 +107,10 @@ export function ConfirmActionModal({
   summaryLines,
   pendingMessage = "Submit in your wallet and wait for the transaction to be mined.",
 }: ConfirmActionModalProps) {
+  const { isConnected } = useAccount();
+  const walletChainId = useChainId();
+  const { connectAsync, connectors, isPending: isConnectPending } = useConnect();
+  const { switchChain, isPending: isSwitchingChain } = useSwitchChain();
   const contractAddress = contractAddressProp ?? "0x7a3f…cd91";
   const walletAddress = walletAddressProp;
   const walletRowText =
@@ -114,6 +119,26 @@ export function ConfirmActionModal({
       : (walletFallback ?? walletLegacy ?? "Not connected");
   const [status, setStatus] = useState<"idle" | "pending" | "success" | "error">("idle");
   const [errorText, setErrorText] = useState<string | null>(null);
+  const wrongChain =
+    isConnected &&
+    explorerChainId != null &&
+    Number.isFinite(explorerChainId) &&
+    walletChainId !== explorerChainId;
+
+  const handleConnectWallet = async () => {
+    const connector = connectors[0];
+    if (!connector) {
+      toast.error("No wallet connector available.");
+      return;
+    }
+    try {
+      await connectAsync({ connector });
+      toast.success("Wallet connected");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to connect wallet";
+      toast.error(msg.length > 140 ? `${msg.slice(0, 140)}…` : msg);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -204,7 +229,7 @@ export function ConfirmActionModal({
           {summaryLines?.length ? (
             <ul className="text-xs font-mono text-muted-foreground list-disc pl-4 space-y-1">
               {summaryLines.map((line) => (
-                <li key={line}>{line}</li>
+                <li key={line} className="whitespace-pre-wrap break-words">{line}</li>
               ))}
             </ul>
           ) : null}
@@ -265,7 +290,20 @@ export function ConfirmActionModal({
             >
               Cancel
             </Button>
-            <Button onClick={handleConfirm}>Submit</Button>
+            {!isConnected ? (
+              <Button onClick={() => void handleConnectWallet()} disabled={isConnectPending}>
+                {isConnectPending ? "Connecting…" : "Connect wallet"}
+              </Button>
+            ) : wrongChain ? (
+              <Button
+                onClick={() => switchChain({ chainId: explorerChainId! })}
+                disabled={isSwitchingChain}
+              >
+                {isSwitchingChain ? "Switching…" : `Switch to chain ${explorerChainId}`}
+              </Button>
+            ) : (
+              <Button onClick={handleConfirm}>Submit</Button>
+            )}
           </DialogFooter>
         )}
       </DialogContent>

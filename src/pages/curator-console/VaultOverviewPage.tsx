@@ -6,47 +6,32 @@ import { Copy, ExternalLink } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { usePublicClient, useReadContract, useWriteContract } from "wagmi";
-import { isAddress, type Address } from "viem";
+import { formatUnits, isAddress, type Address } from "viem";
 import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
 import { useVaultDetailQuery } from "@/hooks/queries/useVaultDetailQuery";
 import { getExplorerAddressUrl } from "@/lib/explorer";
 import { toastChainTxSuccess } from "@/lib/toastChainTx";
 import { supportedWagmiChainIds } from "@/lib/wagmi";
 import { mTokenAbi } from "@/abis/mToken";
+import { manageableVaultAbi } from "@/abis/manageableVault";
+import { depositVaultAbi } from "@/abis/depositVault";
 import { useWalletChainGate } from "@/hooks/useWalletChainGate";
 import { WalletChainGateOrActions } from "@/components/wallet/WalletChainGateOrActions";
-
-/**
- * Demo wallets until API exposes curator addresses.
- * Use full `0x` addresses so DeBank profile links resolve.
- */
-const DEMO_CURATOR_WALLETS = {
-  deposit: {
-    management: {
-      address: "0x1111111111111111111111111111111111111111",
-      balance: "$27,430,215.00",
-    },
-    fee: {
-      address: "0x2222222222222222222222222222222222222222",
-      balance: "$14,832.50",
-    },
-  },
-  redemption: {
-    management: {
-      address: "0x3333333333333333333333333333333333333333",
-      balance: "$27,430,215.00",
-    },
-    fee: {
-      address: "0x4444444444444444444444444444444444444444",
-      balance: "$14,832.50",
-    },
-  },
-} as const;
 
 function formatUSD(value: number) {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
   if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
   return `$${value.toFixed(2)}`;
+}
+
+function formatTokenAmount(raw: bigint | undefined, decimals: number | undefined) {
+  if (raw == null) return "—";
+  const d = decimals ?? 18;
+  const n = Number(formatUnits(raw, d));
+  if (!Number.isFinite(n)) return "—";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
+  return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
 function shortAddr(a: string) {
@@ -116,15 +101,17 @@ function VaultContractAddressRow({
 function CuratorWalletRow({
   label,
   address,
-  balance,
+  loading,
+  readError,
   copyToast,
 }: {
   label: string;
-  address: string;
-  balance: string;
+  address: string | undefined;
+  loading: boolean;
+  readError: boolean;
   copyToast: string;
 }) {
-  const trimmed = address.trim();
+  const trimmed = address?.trim() ?? "";
   const hasAddr = isAddress(trimmed);
   const debankUrl = hasAddr ? `https://debank.com/profile/${trimmed}` : null;
 
@@ -137,7 +124,7 @@ function CuratorWalletRow({
             className="text-sm font-mono text-foreground break-all leading-snug"
             title={hasAddr ? trimmed : undefined}
           >
-            {hasAddr ? trimmed : "—"}
+            {loading ? "Loading…" : hasAddr ? trimmed : "—"}
           </span>
           {hasAddr ? (
             <div className="flex items-center gap-1 shrink-0 pt-0.5">
@@ -156,10 +143,11 @@ function CuratorWalletRow({
           ) : null}
         </div>
         <div className="flex flex-col items-start sm:items-end gap-1 shrink-0">
-          <div className="flex items-center gap-2 flex-wrap sm:justify-end">
-            <span className="font-mono text-sm text-foreground">{balance}</span>
-            <span className="text-[10px] text-muted-foreground whitespace-nowrap">(demo)</span>
-          </div>
+          {readError ? (
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+              Read failed
+            </span>
+          ) : null}
           {debankUrl ? (
             <a
               href={debankUrl}
@@ -183,8 +171,6 @@ function VaultSidePanel({
   chainId,
   vaultDetailLoading,
   vaultDetailError,
-  management,
-  fee,
 }: {
   title: string;
   contractLabel: string;
@@ -192,11 +178,50 @@ function VaultSidePanel({
   chainId: number;
   vaultDetailLoading: boolean;
   vaultDetailError: boolean;
-  management: { address: string; balance: string };
-  fee: { address: string; balance: string };
 }) {
   const copyToast =
     contractLabel === "Deposit vault" ? "Deposit vault address copied" : "Redemption vault address copied";
+  const vaultAddress = contractAddress as Address;
+  const canReadReceivers = Number.isFinite(chainId) && isAddress(contractAddress ?? "");
+
+  const {
+    data: tokenReceiverV1,
+    isLoading: tokenReceiverV1Loading,
+    isError: tokenReceiverV1Error,
+  } = useReadContract({
+    address: vaultAddress,
+    abi: manageableVaultAbi,
+    functionName: "tokenReceiver",
+    chainId,
+    query: { enabled: canReadReceivers },
+  });
+
+  const {
+    data: tokenReceiverV2,
+    isLoading: tokenReceiverV2Loading,
+    isError: tokenReceiverV2Error,
+  } = useReadContract({
+    address: vaultAddress,
+    abi: manageableVaultAbi,
+    functionName: "tokensReceiver",
+    chainId,
+    query: { enabled: canReadReceivers },
+  });
+
+  const {
+    data: feeReceiver,
+    isLoading: feeReceiverLoading,
+    isError: feeReceiverError,
+  } = useReadContract({
+    address: vaultAddress,
+    abi: manageableVaultAbi,
+    functionName: "feeReceiver",
+    chainId,
+    query: { enabled: canReadReceivers },
+  });
+  const tokenReceiver = tokenReceiverV1 ?? tokenReceiverV2;
+  const tokenReceiverLoading = tokenReceiverV1Loading || tokenReceiverV2Loading;
+  const tokenReceiverError = tokenReceiverV1Error && tokenReceiverV2Error;
 
   return (
     <Card className="bg-card border-border h-full">
@@ -219,14 +244,16 @@ function VaultSidePanel({
         ) : null}
         <CuratorWalletRow
           label="Management wallet"
-          address={management.address}
-          balance={management.balance}
+          address={tokenReceiver}
+          loading={tokenReceiverLoading}
+          readError={tokenReceiverError}
           copyToast="Management wallet address copied"
         />
         <CuratorWalletRow
           label="Fee wallet"
-          address={fee.address}
-          balance={fee.balance}
+          address={feeReceiver}
+          loading={feeReceiverLoading}
+          readError={feeReceiverError}
           copyToast="Fee wallet address copied"
         />
       </CardContent>
@@ -257,6 +284,27 @@ export default function VaultOverviewPage() {
       enabled: Boolean(valid && mTokenAddress && chainSupported),
     },
   });
+  const { data: mTokenSupply } = useReadContract({
+    address: mToken,
+    abi: mTokenAbi,
+    functionName: "totalSupply",
+    chainId,
+    query: { enabled: Boolean(valid && mTokenAddress && chainSupported) },
+  });
+  const { data: mTokenDecimals } = useReadContract({
+    address: mToken,
+    abi: mTokenAbi,
+    functionName: "decimals",
+    chainId,
+    query: { enabled: Boolean(valid && mTokenAddress && chainSupported) },
+  });
+  const { data: mTokenSymbol } = useReadContract({
+    address: mToken,
+    abi: mTokenAbi,
+    functionName: "symbol",
+    chainId,
+    query: { enabled: Boolean(valid && mTokenAddress && chainSupported) },
+  });
 
   const { mutateAsync: writeMToken, isPending: writePending } = useWriteContract();
 
@@ -265,6 +313,26 @@ export default function VaultOverviewPage() {
     isLoading: vaultDetailLoading,
     isError: vaultDetailError,
   } = useVaultDetailQuery(valid ? chainId : undefined, valid ? mTokenAddress : undefined);
+  const depositVaultAddress = vaultDetail?.depositVaultAddress;
+  const depositVault = depositVaultAddress as Address;
+  const canReadDepositSupplyCap = Boolean(
+    chainSupported && typeof chainId === "number" && isAddress(depositVaultAddress ?? ""),
+  );
+  const { data: maxSupplyCapV1 } = useReadContract({
+    address: depositVault,
+    abi: depositVaultAbi,
+    functionName: "maxSupplyCap",
+    chainId,
+    query: { enabled: canReadDepositSupplyCap },
+  });
+  const { data: maxSupplyCapV2 } = useReadContract({
+    address: depositVault,
+    abi: depositVaultAbi,
+    functionName: "maxSupply",
+    chainId,
+    query: { enabled: canReadDepositSupplyCap },
+  });
+  const maxSupplyCap = maxSupplyCapV1 ?? maxSupplyCapV2;
 
   const runPauseToggle = useCallback(
     async (action: "pause" | "unpause") => {
@@ -305,8 +373,11 @@ export default function VaultOverviewPage() {
   );
 
   const tvl = vault?.tvl ?? 0;
-  const cap = vault?.capacity ?? 0;
-  const utilizationPct = cap > 0 ? Math.min(100, (tvl / cap) * 100) : 0;
+  const mDecimals = mTokenDecimals != null ? Number(mTokenDecimals) : undefined;
+  const supplyUtilizationPct =
+    mTokenSupply != null && maxSupplyCap != null && maxSupplyCap > 0n
+      ? Math.min(100, Number((mTokenSupply * 10_000n) / maxSupplyCap) / 100)
+      : 0;
   const explorer = chainId && mTokenAddress ? getExplorerAddressUrl(chainId, mTokenAddress) : "#";
 
   const title = vault?.name ?? "Vault overview";
@@ -351,9 +422,9 @@ export default function VaultOverviewPage() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
           <Card className="bg-card border-border">
             <CardContent className="pt-4 pb-4">
-              <div className="text-xs text-muted-foreground">NAV / share</div>
+              <div className="text-xs text-muted-foreground">NAV (USD / share)</div>
               <div className="text-xl font-mono font-bold text-foreground mt-1">
-                {vault ? `${vault.navPerShare.toFixed(4)} ${vault.underlyingSymbol}` : "—"}
+                {vault ? `$${vault.navPerShare.toFixed(4)}` : "—"}
               </div>
             </CardContent>
           </Card>
@@ -361,20 +432,27 @@ export default function VaultOverviewPage() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
           <Card className="bg-card border-border">
             <CardContent className="pt-4 pb-4">
-              <div className="text-xs text-muted-foreground">TVL / Capacity (USD)</div>
+              <div className="text-xs text-muted-foreground">
+                Total Supply / Capacity ({mTokenSymbol ?? "mToken"})
+              </div>
               <div className="text-xl font-mono font-bold text-foreground mt-1">
-                {vault ? (
+                {mTokenSupply != null || maxSupplyCap != null ? (
                   <>
-                    {formatUSD(tvl)} <span className="text-sm text-muted-foreground font-normal">/ {formatUSD(cap)}</span>
+                    {formatTokenAmount(mTokenSupply, mDecimals)}{" "}
+                    <span className="text-sm text-muted-foreground font-normal">
+                      / {formatTokenAmount(maxSupplyCap, mDecimals)}
+                    </span>
                   </>
                 ) : (
                   "—"
                 )}
               </div>
-              {vault && cap > 0 ? (
+              {maxSupplyCap != null && maxSupplyCap > 0n ? (
                 <>
-                  <Progress value={utilizationPct} className="h-1.5 mt-2" />
-                  <div className="text-[10px] font-mono text-muted-foreground mt-1">{utilizationPct.toFixed(0)}% utilized</div>
+                  <Progress value={supplyUtilizationPct} className="h-1.5 mt-2" />
+                  <div className="text-[10px] font-mono text-muted-foreground mt-1">
+                    {supplyUtilizationPct.toFixed(0)}% utilized
+                  </div>
                 </>
               ) : null}
             </CardContent>
@@ -391,8 +469,6 @@ export default function VaultOverviewPage() {
           chainId={chainId}
           vaultDetailLoading={vaultDetailLoading}
           vaultDetailError={vaultDetailError}
-          management={DEMO_CURATOR_WALLETS.deposit.management}
-          fee={DEMO_CURATOR_WALLETS.deposit.fee}
         />
         <VaultSidePanel
           title="Redemption vault"
@@ -401,8 +477,6 @@ export default function VaultOverviewPage() {
           chainId={chainId}
           vaultDetailLoading={vaultDetailLoading}
           vaultDetailError={vaultDetailError}
-          management={DEMO_CURATOR_WALLETS.redemption.management}
-          fee={DEMO_CURATOR_WALLETS.redemption.fee}
         />
       </div>
 

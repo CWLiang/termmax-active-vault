@@ -83,7 +83,7 @@ export default function PositionsPage() {
                     <h4 className="font-display font-semibold text-foreground">{pos.vaultName}</h4>
                     <p className="text-xs text-muted-foreground font-mono mt-0.5 flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {pos.shares.toLocaleString(undefined, { maximumFractionDigits: 4 })} shares · NAV {pos.pricePerShare.toFixed(4)} · APY {pos.apy7d}%
+                      {pos.shares.toLocaleString(undefined, { maximumFractionDigits: 4 })} shares · NAV ${pos.pricePerShare.toFixed(4)} (USD/share) · APY {pos.apy7d}%
                     </p>
                   </div>
                   <div className="text-right">

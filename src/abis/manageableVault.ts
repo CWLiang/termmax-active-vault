@@ -1,5 +1,5 @@
 /**
- * Minimal IManageableVault ABI — resolve mToken DataFeed for NAV / oracle settings.
+ * Minimal IManageableVault ABI used by curator pages.
  */
 export const manageableVaultAbi = [
   {
@@ -18,9 +18,103 @@ export const manageableVaultAbi = [
   },
   {
     type: "function",
+    name: "tokenReceiver",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address", name: "" }],
+  },
+  {
+    type: "function",
     name: "tokensReceiver",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "address", name: "" }],
+  },
+  {
+    type: "function",
+    name: "instantDailyLimit",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256", name: "" }],
+  },
+  {
+    type: "function",
+    name: "instantFee",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256", name: "" }],
+  },
+  {
+    type: "function",
+    name: "requestRedeemer",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address", name: "" }],
+  },
+  {
+    type: "function",
+    name: "setTokensReceiver",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "address", name: "receiver" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "setFeeReceiver",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "address", name: "receiver" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "setRequestRedeemer",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "address", name: "redeemer" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "setInstantFee",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "newInstantFee" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "setInstantDailyLimit",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "newInstantDailyLimit" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "setVariationTolerance",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "tolerance" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "addPaymentToken",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "address", name: "token" },
+      { type: "address", name: "dataFeed" },
+      { type: "uint256", name: "fee" },
+      { type: "uint256", name: "allowance" },
+      { type: "bool", name: "stable" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "withdrawToken",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "address", name: "token" },
+      { type: "uint256", name: "amount" },
+      { type: "address", name: "withdrawTo" },
+    ],
+    outputs: [],
   },
 ] as const;

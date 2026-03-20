@@ -27,6 +27,7 @@ import { getExplorerAddressUrl, getExplorerTxUrl } from "@/lib/explorer";
 import { readAggregatorLatestNav } from "@/lib/readAggregatorLatestNav";
 import { supportedWagmiChainIds } from "@/lib/wagmi";
 import { manageableVaultAbi } from "@/abis/manageableVault";
+import { mTokenAbi } from "@/abis/mToken";
 import { customAggregatorV3CompatibleFeedAbi } from "@/abis/customAggregatorV3CompatibleFeed";
 import { aggregatorV3DecimalsAbi, dataFeedAbi } from "@/abis/dataFeed";
 import { planMinMaxAnswerTxs } from "@/lib/dataFeedTxPlan";
@@ -351,10 +352,19 @@ export default function NAVManagementPage() {
     if (vault) return vault.navPerShare;
     return 0;
   }, [vaultDetail, vault]);
+  const mTokenAddr = useMemo(
+    () => (isAddress(mTokenAddress) ? (normalizeVaultAddress(mTokenAddress) as Address) : undefined),
+    [mTokenAddress],
+  );
+  const { data: mTokenSymbol } = useReadContract({
+    address: mTokenAddr,
+    abi: mTokenAbi,
+    functionName: "symbol",
+    chainId,
+    query: { enabled: Boolean(mTokenAddr && chainSupported) },
+  });
 
   const displayNav = chainNavSnapshot != null && chainNavSnapshot.nav > 0 ? chainNavSnapshot.nav : currentNav;
-
-  const underlyingSymbol = vaultDetail?.underlyingSymbol ?? vault?.underlyingSymbol ?? "share";
 
   useEffect(() => {
     setChainNavSnapshot(null);
@@ -514,7 +524,6 @@ export default function NAVManagementPage() {
 
   const parsed = parseFloat(newNav) || 0;
   const changePct = displayNav > 0 ? ((parsed - displayNav) / displayNav) * 100 : 0;
-  const inRange = Math.abs(changePct) <= 5;
 
   const navHumanParseOk = useMemo(() => {
     if (aggregatorDecimals == null || !newNav.trim()) return false;
@@ -872,8 +881,10 @@ export default function NAVManagementPage() {
               <div className="text-sm text-muted-foreground font-mono">Reading on-chain latestRoundData…</div>
             ) : displayNav > 0 ? (
               <div className="text-3xl font-mono font-bold text-foreground">
-                {formatNavPrice(displayNav, 6)}{" "}
-                <span className="text-base text-muted-foreground font-normal">{underlyingSymbol} per share</span>
+                ${formatNavPrice(displayNav, 6)}{" "}
+                <span className="text-base text-muted-foreground font-normal">
+                  USD per {mTokenSymbol ?? "mToken"}
+                </span>
                 {chainNavSnapshot ? (
                   <span className="block text-[10px] font-normal text-muted-foreground mt-1 normal-case">
                     Source: aggregator <span className="font-mono">latestRoundData</span>
@@ -910,7 +921,6 @@ export default function NAVManagementPage() {
                   ? `${(Number(onChainHealthyDiff) / 3600).toFixed(1)}h on-chain`
                   : "—"}
               </span>
-              <span>Deviation limit: ±5%</span>
               {vaultDetail != null && Number.isFinite(vaultDetail.navChange24h) ? (
                 <span className={vaultDetail.navChange24h >= 0 ? "text-yield-positive" : "text-destructive"}>
                   API 24h: {vaultDetail.navChange24h >= 0 ? "+" : ""}
@@ -926,18 +936,14 @@ export default function NAVManagementPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <OnChainAddressRow
                   label="DataFeed (mTokenDataFeed)"
-                  description={
-                    dataFeedSource
-                      ? `Resolved via ${dataFeedSource === "deposit" ? "deposit" : "redemption"} vault · DataFeed.sol`
-                      : "Oracle wrapper used by the vault (healthyDiff / expected answers) · DataFeed.sol"
-                  }
+                  description={dataFeedSource ? `Resolved via ${dataFeedSource === "deposit" ? "deposit" : "redemption"} vault` : "Oracle wrapper used by the vault"}
                   address={dataFeedAddress}
                   placeholder={dataFeedRowPlaceholder}
                   explorerChainId={explorerChainId}
                 />
                 <OnChainAddressRow
                   label="Aggregator (price feed)"
-                  description="CustomAggregatorV3CompatibleFeed — setRoundDataSafe(int256) / setRoundData(int256); timestamps use block.timestamp on-chain."
+                  description="Aggregator used by the vault price feed."
                   address={agg ? String(agg) : undefined}
                   placeholder={aggregatorRowPlaceholder}
                   explorerChainId={explorerChainId}
@@ -956,17 +962,12 @@ export default function NAVManagementPage() {
           <div className="space-y-3">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Update NAV</div>
             <div>
-              <label className="text-xs text-muted-foreground">New NAV (6 decimal places)</label>
+              <label className="text-xs text-muted-foreground">New NAV (USD, 6 decimal places)</label>
               <Input value={newNav} onChange={(e) => setNewNav(e.target.value)} className="font-mono mt-1 h-9" />
             </div>
-            <div className={`text-xs font-mono ${inRange ? "text-yield-positive" : "text-destructive"}`}>
+            <div className="text-xs font-mono text-muted-foreground">
               Change: {changePct >= 0 ? "+" : ""}
-              {changePct.toFixed(3)}% —{" "}
-              {displayNav > 0
-                ? inRange
-                  ? "Within ±5%"
-                  : "Outside ±5%"
-                : "Set current NAV (on-chain or API) first"}
+              {changePct.toFixed(3)}%
             </div>
             <WalletChainGateOrActions gate={gate}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 w-full">
@@ -984,18 +985,14 @@ export default function NAVManagementPage() {
                   className="sm:flex-1 h-8 text-xs"
                   disabled={!agg || aggregatorDecimals == null || !navHumanParseOk}
                   onClick={() => void openNavConfirm("force")}
-                  title="Use when NAV change exceeds ±5%"
+                  title="Force submit NAV update"
                 >
                   Force submit
                 </Button>
               </div>
             </WalletChainGateOrActions>
             <p className="text-[10px] text-muted-foreground leading-snug">
-              Calls <span className="font-mono">CustomAggregatorV3CompatibleFeed</span>:{" "}
-              <span className="font-mono">setRoundDataSafe(int256)</span> (max deviation check) or{" "}
-              <span className="font-mono">setRoundData(int256)</span> (feed admin only, no deviation check). Encode NAV with{" "}
-              <span className="font-mono">decimals()</span> like <span className="font-mono">latestRoundData</span>. Round
-              times are <span className="font-mono">block.timestamp</span> inside the contract.
+              Submits NAV to the vault price feed using its configured decimals.
             </p>
           </div>
         </CardContent>
@@ -1054,7 +1051,7 @@ export default function NAVManagementPage() {
                       border: "1px solid hsl(220, 15%, 16%)",
                       fontSize: 12,
                     }}
-                    formatter={(value: number) => [`${formatNavPrice(value, 6)}`, "NAV / share"]}
+                    formatter={(value: number) => [`$${formatNavPrice(value, 6)}`, `NAV (USD / ${mTokenSymbol ?? "mToken"})`]}
                   />
                   <Area
                     type="monotone"
