@@ -25,8 +25,8 @@ import { normalizeVaultAddress } from "@/lib/evmAddress";
 const vaultNavItems = [
   { title: "Vault Overview", segment: "overview" as const, icon: Eye },
   { title: "NAV Management", segment: "nav" as const, icon: TrendingUp, badge: "high" as const },
-  { title: "Redemption", segment: "redemption" as const, icon: ArrowRightLeft, badge: "high" as const },
-  { title: "Deposit Vault", segment: "deposit" as const, icon: ArrowDownToLine },
+  { title: "Redemption Management", segment: "redemption" as const, icon: ArrowRightLeft, badge: "high" as const },
+  { title: "Depsoit Management", segment: "deposit" as const, icon: ArrowDownToLine },
   { title: "Audit Log", segment: "audit-log" as const, icon: FileText },
 ];
 

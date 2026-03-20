@@ -5,13 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Copy, ExternalLink } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWriteContract } from "wagmi";
+import { usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import { isAddress, type Address } from "viem";
 import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
 import { useVaultDetailQuery } from "@/hooks/queries/useVaultDetailQuery";
 import { getExplorerAddressUrl } from "@/lib/explorer";
+import { toastChainTxSuccess } from "@/lib/toastChainTx";
 import { supportedWagmiChainIds } from "@/lib/wagmi";
 import { mTokenAbi } from "@/abis/mToken";
+import { useWalletChainGate } from "@/hooks/useWalletChainGate";
+import { WalletChainGateOrActions } from "@/components/wallet/WalletChainGateOrActions";
 
 /**
  * Demo wallets until API exposes curator addresses.
@@ -233,15 +236,12 @@ function VaultSidePanel({
 
 export default function VaultOverviewPage() {
   const { vault, mTokenAddress, chainId, valid } = useCuratorVaultSummary();
-  const { isConnected } = useAccount();
-  const walletChainId = useChainId();
-  const { switchChain, isPending: isSwitching } = useSwitchChain();
   const publicClient = usePublicClient({ chainId });
   const [txBusy, setTxBusy] = useState(false);
+  const gate = useWalletChainGate(valid ? chainId : undefined, valid);
 
   const chainSupported = typeof chainId === "number" && supportedWagmiChainIds.has(chainId);
   const mToken = mTokenAddress as Address;
-  const wrongChain = isConnected && chainSupported && walletChainId !== chainId;
 
   const {
     data: paused,
@@ -272,16 +272,8 @@ export default function VaultOverviewPage() {
         toast.error("This vault chain is not configured in the app wallet (wagmi).");
         return;
       }
-      if (!isConnected) {
-        toast.error("Connect a wallet first.");
-        return;
-      }
-      if (wrongChain) {
-        try {
-          switchChain({ chainId });
-        } catch (e) {
-          toast.error(formatTxError(e));
-        }
+      if (!gate.canTransact) {
+        toast.error("Connect wallet and switch to the vault network.");
         return;
       }
       setTxBusy(true);
@@ -295,7 +287,13 @@ export default function VaultOverviewPage() {
         if (publicClient) {
           await publicClient.waitForTransactionReceipt({ hash });
         }
-        toast.success(action === "pause" ? "mToken paused" : "mToken unpaused");
+        if (typeof chainId === "number") {
+          toastChainTxSuccess(
+            action === "pause" ? "mToken paused" : "mToken unpaused",
+            chainId,
+            hash,
+          );
+        }
         await refetchPaused();
       } catch (e) {
         toast.error(formatTxError(e));
@@ -303,18 +301,7 @@ export default function VaultOverviewPage() {
         setTxBusy(false);
       }
     },
-    [
-      chainId,
-      chainSupported,
-      isConnected,
-      mToken,
-      mTokenAddress,
-      publicClient,
-      refetchPaused,
-      switchChain,
-      wrongChain,
-      writeMToken,
-    ],
+    [chainId, chainSupported, gate.canTransact, mToken, mTokenAddress, publicClient, refetchPaused, writeMToken],
   );
 
   const tvl = vault?.tvl ?? 0;
@@ -484,47 +471,35 @@ export default function VaultOverviewPage() {
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2 justify-end">
-              {!isConnected ? (
-                <span className="text-xs text-muted-foreground">Connect wallet to pause / unpause</span>
-              ) : !chainSupported ? (
-                <span className="text-xs text-muted-foreground">Wallet does not include this chain</span>
-              ) : wrongChain ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  className="text-xs"
-                  disabled={isSwitching}
-                  onClick={() => switchChain({ chainId })}
-                >
-                  {isSwitching ? "Switching…" : `Switch to chain ${chainId}`}
-                </Button>
-              ) : pausedLoading ? (
-                <span className="text-xs text-muted-foreground">Loading on-chain status…</span>
-              ) : pausedReadError ? (
-                <span className="text-xs text-muted-foreground">Fix RPC / contract to transact</span>
-              ) : paused ? (
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  className="text-xs"
-                  disabled={writePending || txBusy}
-                  onClick={() => void runPauseToggle("unpause")}
-                >
-                  {writePending || txBusy ? "Confirm…" : `Unpause ${vault?.underlyingSymbol ?? "mToken"}`}
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  className="text-xs"
-                  disabled={writePending || txBusy}
-                  onClick={() => void runPauseToggle("pause")}
-                >
-                  {writePending || txBusy ? "Confirm…" : `Pause ${vault?.underlyingSymbol ?? "mToken"}`}
-                </Button>
-              )}
+              <WalletChainGateOrActions gate={gate} silenceUnsupportedMessage>
+                {pausedLoading ? (
+                  <span className="text-xs text-muted-foreground">Loading on-chain status…</span>
+                ) : pausedReadError ? (
+                  <span className="text-xs text-muted-foreground">Fix RPC / contract to transact</span>
+                ) : paused ? (
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    className="text-xs"
+                    disabled={writePending || txBusy}
+                    onClick={() => void runPauseToggle("unpause")}
+                  >
+                    {writePending || txBusy ? "Submit…" : `Unpause ${vault?.underlyingSymbol ?? "mToken"}`}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    className="text-xs"
+                    disabled={writePending || txBusy}
+                    onClick={() => void runPauseToggle("pause")}
+                  >
+                    {writePending || txBusy ? "Submit…" : `Pause ${vault?.underlyingSymbol ?? "mToken"}`}
+                  </Button>
+                )}
+              </WalletChainGateOrActions>
             </div>
           </div>
         </CardContent>

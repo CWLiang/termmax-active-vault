@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmActionModal } from "@/components/curator-console/ConfirmActionModal";
+import { useReadContract } from "wagmi";
 import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
+import { useVaultDetailQuery } from "@/hooks/queries/useVaultDetailQuery";
+import { manageableVaultAbi } from "@/abis/manageableVault";
 
 const requests = [
   { id: 1042, address: "0xAB12…", amount: "50,000", date: "2026-03-19" },
@@ -22,8 +25,37 @@ const requests = [
 
 const CURRENT_NAV = "1.1162";
 
+function shortAddr(a?: string) {
+  if (!a) return "—";
+  return a.length > 12 ? `${a.slice(0, 6)}...${a.slice(-4)}` : a;
+}
+
 export default function RedemptionPage() {
-  const { vault } = useCuratorVaultSummary();
+  const { vault, chainId, mTokenAddress, valid } = useCuratorVaultSummary();
+  const { data: vaultDetail } = useVaultDetailQuery(valid ? chainId : undefined, valid ? mTokenAddress : undefined);
+  const vaultAddress = vaultDetail?.redemptionVaultAddress;
+
+  const { data: tokensReceiver } = useReadContract({
+    address: vaultAddress as `0x${string}` | undefined,
+    abi: manageableVaultAbi,
+    functionName: "tokensReceiver",
+    chainId,
+    query: { enabled: Boolean(vaultAddress) },
+  });
+  const { data: feeReceiver } = useReadContract({
+    address: vaultAddress as `0x${string}` | undefined,
+    abi: manageableVaultAbi,
+    functionName: "feeReceiver",
+    chainId,
+    query: { enabled: Boolean(vaultAddress) },
+  });
+  const walletRows = useMemo(
+    () => [
+      { label: "Management Wallet", addr: tokensReceiver ? String(tokensReceiver) : undefined },
+      { label: "Fee Wallet", addr: feeReceiver ? String(feeReceiver) : undefined },
+    ],
+    [feeReceiver, tokensReceiver],
+  );
   const [selected, setSelected] = useState<number[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -174,25 +206,25 @@ export default function RedemptionPage() {
 
       {/* ── Redemption Vault Settings ── */}
       <div className="pt-4">
-        <h2 className="text-xl font-display font-bold text-foreground mb-4">Redemption Vault Settings</h2>
+        <h2 className="text-xl font-display font-bold text-foreground mb-4">Redemption Management</h2>
       </div>
 
       {/* Wallets */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3"><CardTitle className="font-display text-sm">Wallets</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          {[
-            { label: "Management Wallet", addr: "0x3f4a...bc12", bal: "$27,430,215.00", full: "0x3f4abc12" },
-            { label: "Fee Wallet", addr: "0x7e2d...aa09", bal: "$14,832.50", full: "0x7e2daa09" },
-          ].map((w, i) => (
+          {walletRows.map((w, i) => (
             <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4 flex-wrap">
               <div>
                 <div className="text-xs text-muted-foreground">{w.label}</div>
-                <div className="font-mono text-sm text-foreground">{w.addr}</div>
+                <div className="font-mono text-sm text-foreground">{shortAddr(w.addr)}</div>
               </div>
               <div className="flex items-center gap-3">
-                <span className="font-mono text-sm">{w.bal}</span>
-                <a href={`https://debank.com/profile/${w.full}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View on DeBank ↗</a>
+                {w.addr ? (
+                  <a href={`https://debank.com/profile/${w.addr}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View on DeBank ↗</a>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
                 <Button size="sm" variant="outline" className="text-xs" onClick={() => openConfirm(`Change ${w.label} Address`)}>Change Address</Button>
               </div>
             </div>
@@ -321,7 +353,7 @@ export default function RedemptionPage() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setRateModalOpen(false)}>Cancel</Button>
-            <Button onClick={submitRateModal}>Confirm Rate & Submit</Button>
+            <Button onClick={submitRateModal}>Submit</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

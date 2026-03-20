@@ -1,15 +1,48 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { ConfirmActionModal } from "@/components/curator-console/ConfirmActionModal";
+import { useReadContract } from "wagmi";
 import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
+import { useVaultDetailQuery } from "@/hooks/queries/useVaultDetailQuery";
+import { manageableVaultAbi } from "@/abis/manageableVault";
 import { AlertTriangle, Plus } from "lucide-react";
 
+function shortAddr(a?: string) {
+  if (!a) return "—";
+  return a.length > 12 ? `${a.slice(0, 6)}...${a.slice(-4)}` : a;
+}
+
 export default function DepositVaultPage() {
-  const { vault } = useCuratorVaultSummary();
+  const { vault, chainId, mTokenAddress, valid } = useCuratorVaultSummary();
+  const { data: vaultDetail } = useVaultDetailQuery(valid ? chainId : undefined, valid ? mTokenAddress : undefined);
+  const vaultAddress = vaultDetail?.depositVaultAddress;
+
+  const { data: tokensReceiver } = useReadContract({
+    address: vaultAddress as `0x${string}` | undefined,
+    abi: manageableVaultAbi,
+    functionName: "tokensReceiver",
+    chainId,
+    query: { enabled: Boolean(vaultAddress) },
+  });
+  const { data: feeReceiver } = useReadContract({
+    address: vaultAddress as `0x${string}` | undefined,
+    abi: manageableVaultAbi,
+    functionName: "feeReceiver",
+    chainId,
+    query: { enabled: Boolean(vaultAddress) },
+  });
+
+  const walletRows = useMemo(
+    () => [
+      { label: "Management Wallet", addr: tokensReceiver ? String(tokensReceiver) : undefined },
+      { label: "Fee Wallet", addr: feeReceiver ? String(feeReceiver) : undefined },
+    ],
+    [feeReceiver, tokensReceiver],
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState("");
   const [showAddToken, setShowAddToken] = useState(false);
@@ -19,7 +52,7 @@ export default function DepositVaultPage() {
   return (
     <div className="p-6 space-y-6 max-w-5xl">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-display font-bold text-foreground">Deposit Vault Settings</h1>
+        <h1 className="text-2xl font-display font-bold text-foreground">Depsoit Management</h1>
         {vault && <p className="text-sm text-muted-foreground mt-1 font-mono">{vault.name}</p>}
       </motion.div>
 
@@ -27,18 +60,18 @@ export default function DepositVaultPage() {
       <Card className="bg-card border-border">
         <CardHeader className="pb-3"><CardTitle className="font-display text-sm">Wallets</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          {[
-            { label: "Management Wallet", addr: "0x3f4a...bc12", bal: "$27,430,215.00", full: "0x3f4abc12" },
-            { label: "Fee Wallet", addr: "0x7e2d...aa09", bal: "$14,832.50", full: "0x7e2daa09" },
-          ].map((w, i) => (
+          {walletRows.map((w, i) => (
             <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4 flex-wrap">
               <div>
                 <div className="text-xs text-muted-foreground">{w.label}</div>
-                <div className="font-mono text-sm text-foreground">{w.addr}</div>
+                <div className="font-mono text-sm text-foreground">{shortAddr(w.addr)}</div>
               </div>
               <div className="flex items-center gap-3">
-                <span className="font-mono text-sm">{w.bal}</span>
-                <a href={`https://debank.com/profile/${w.full}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View on DeBank ↗</a>
+                {w.addr ? (
+                  <a href={`https://debank.com/profile/${w.addr}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View on DeBank ↗</a>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
                 <Button size="sm" variant="outline" className="text-xs" onClick={() => openConfirm(`Change ${w.label} Address`)}>Change Address</Button>
               </div>
             </div>

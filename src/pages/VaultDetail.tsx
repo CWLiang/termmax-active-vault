@@ -581,7 +581,7 @@ function WithdrawPanel({ view }: { view: VaultDetailView }) {
               Back
             </Button>
             <Button variant="accent" className="flex-1">
-              Confirm
+              Submit
             </Button>
           </div>
         </motion.div>
