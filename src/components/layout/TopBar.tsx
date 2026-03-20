@@ -1,8 +1,11 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
-import { Wallet, Globe } from "lucide-react";
+import { ConnectWalletControl } from "@/components/wallet/ConnectWalletControl";
+import { Globe } from "lucide-react";
+import { useAccount } from "wagmi";
 
 export function TopBar() {
+  const { chain } = useAccount();
+
   return (
     <header className="h-14 flex items-center justify-between border-b border-border px-4 bg-background/80 backdrop-blur-sm">
       <div className="flex items-center gap-3">
@@ -17,12 +20,9 @@ export function TopBar() {
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Globe className="h-3.5 w-3.5" />
-          <span>Ethereum</span>
+          <span>{chain?.name ?? "Ethereum"}</span>
         </div>
-        <Button variant="outline-primary" size="sm" className="font-mono text-xs">
-          <Wallet className="h-3.5 w-3.5" />
-          Connect Wallet
-        </Button>
+        <ConnectWalletControl />
       </div>
     </header>
   );

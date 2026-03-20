@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmActionModal } from "@/components/curator-console/ConfirmActionModal";
+import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
 
 const requests = [
   { id: 1042, address: "0xAB12…", amount: "50,000", date: "2026-03-19" },
@@ -22,6 +23,7 @@ const requests = [
 const CURRENT_NAV = "1.1162";
 
 export default function RedemptionPage() {
+  const { vault } = useCuratorVaultSummary();
   const [selected, setSelected] = useState<number[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -70,6 +72,7 @@ export default function RedemptionPage() {
     <div className="p-6 space-y-6 max-w-5xl">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-display font-bold text-foreground">Redemption Management</h1>
+        {vault && <p className="text-sm text-muted-foreground mt-1 font-mono">{vault.name}</p>}
       </motion.div>
 
       {/* Overview */}

@@ -5,55 +5,9 @@ import { Gauge } from "@/components/ui/gauge";
 import { TrendingUp, Users, DollarSign, ArrowRight, Shield, Clock, Wallet, ChevronDown, ChevronUp } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-
-const MOCK_VAULTS = [
-  {
-    id: "vault-1",
-    name: "RWA Enhanced Yield",
-    curator: "Keyrock Capital",
-    strategy: "RWA collateral + fixed-rate leverage on TermMax + satellite FT/PT + Aave/Morpho lending",
-    apy7d: 9.8,
-    apy30d: 9.5,
-    tvl: 27_396_699,
-    capacity: 50_000_000,
-    bufferRatio: 10.9,
-    riskLevel: "Medium",
-  },
-  {
-    id: "vault-2",
-    name: "T-Bill Maximizer",
-    curator: "Re7 Labs",
-    strategy: "DigiFT T-bill + TermMax fixed-rate lending",
-    apy7d: 6.18,
-    apy30d: 6.05,
-    tvl: 8_200_000,
-    capacity: 20_000_000,
-    bufferRatio: 18.7,
-    riskLevel: "Low",
-  },
-];
-
-// Mock user positions (shown when wallet connected)
-const MOCK_USER_POSITIONS = [
-  {
-    vaultId: "vault-1",
-    vaultName: "RWA Enhanced Yield",
-    shares: 14_850.32,
-    pricePerShare: 1.0342,
-    redeemableUSDC: 15_358.23,
-    redeemableUSD: 15_354.05,
-    apy7d: 9.8,
-  },
-  {
-    vaultId: "vault-2",
-    vaultName: "T-Bill Maximizer",
-    shares: 49_720.15,
-    pricePerShare: 1.0128,
-    redeemableUSDC: 50_356.22,
-    redeemableUSD: 50_341.70,
-    apy7d: 6.18,
-  },
-];
+import { useVaultListData } from "@/hooks/queries/useVaultListData";
+import { useAccount } from "wagmi";
+import { vaultDetailPath } from "@/domain/vaults/mappers";
 
 function formatUSD(value: number) {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -67,14 +21,24 @@ function formatUSDExact(value: number) {
 
 export default function VaultListPage() {
   const navigate = useNavigate();
-  const totalTVL = MOCK_VAULTS.reduce((s, v) => s + v.tvl, 0);
-
-  // Mock wallet connection state — toggle to preview
-  const [isWalletConnected] = useState(true);
+  const { isConnected } = useAccount();
+  const { data, isLoading, isError } = useVaultListData();
   const [positionsExpanded, setPositionsExpanded] = useState(true);
+  const vaults = data?.vaults ?? [];
+  const userPositions = data?.userPositions ?? [];
+  const isWalletConnected = isConnected;
+  const totalTVL = vaults.reduce((s, v) => s + v.tvl, 0);
+  const totalRedeemableUSDC = userPositions.reduce((s, p) => s + p.redeemableUSDC, 0);
+  const totalRedeemableUSD = userPositions.reduce((s, p) => s + p.redeemableUSD, 0);
+  const avgApy7d = vaults.length ? vaults.reduce((s, v) => s + v.apy7d, 0) / vaults.length : 0;
 
-  const totalRedeemableUSDC = MOCK_USER_POSITIONS.reduce((s, p) => s + p.redeemableUSDC, 0);
-  const totalRedeemableUSD = MOCK_USER_POSITIONS.reduce((s, p) => s + p.redeemableUSD, 0);
+  if (isLoading) {
+    return <div className="p-6 max-w-6xl mx-auto text-muted-foreground">Loading vault data...</div>;
+  }
+
+  if (isError) {
+    return <div className="p-6 max-w-6xl mx-auto text-destructive">Failed to load vault data.</div>;
+  }
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
@@ -102,12 +66,17 @@ export default function VaultListPage() {
         className="grid grid-cols-1 sm:grid-cols-3 gap-4"
       >
         <StatCard label="Total TVL" value={formatUSD(totalTVL)} icon={<DollarSign className="h-4 w-4" />} />
-        <StatCard label="Avg APY (7d)" value="7.99%" variant="primary" icon={<TrendingUp className="h-4 w-4" />} subValue="+0.22%" trend="up" />
-        <StatCard label="Active Vaults" value="2" icon={<Users className="h-4 w-4" />} />
+        <StatCard
+          label="Avg APY (7d)"
+          value={`${avgApy7d.toFixed(2)}%`}
+          variant="primary"
+          icon={<TrendingUp className="h-4 w-4" />}
+        />
+        <StatCard label="Active Vaults" value={vaults.length.toString()} icon={<Users className="h-4 w-4" />} />
       </motion.div>
 
       {/* My Positions — visible when wallet connected */}
-      {isWalletConnected && MOCK_USER_POSITIONS.length > 0 && (
+      {isWalletConnected && userPositions.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -126,14 +95,17 @@ export default function VaultListPage() {
               <div className="text-left">
                 <h2 className="text-base font-display font-bold text-foreground">My Positions</h2>
                 <p className="text-xs text-muted-foreground font-mono">
-                  {MOCK_USER_POSITIONS.length} vault{MOCK_USER_POSITIONS.length > 1 ? "s" : ""}
+                  {userPositions.length} vault{userPositions.length > 1 ? "s" : ""}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-6">
               <div className="text-right">
                 <div className="text-xs text-muted-foreground font-mono">Total Redeemable</div>
-                <div className="text-lg font-display font-bold text-foreground">{totalRedeemableUSDC.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC</div>
+                <div className="text-lg font-display font-bold text-foreground">
+                  {totalRedeemableUSDC.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
+                  {userPositions[0]?.underlyingSymbol ?? "USD"}
+                </div>
                 <div className="text-xs text-muted-foreground font-mono">≈ {formatUSDExact(totalRedeemableUSD)}</div>
               </div>
               {positionsExpanded ? (
@@ -155,11 +127,11 @@ export default function VaultListPage() {
                 className="overflow-hidden"
               >
                 <div className="border-t border-border">
-                  {MOCK_USER_POSITIONS.map((pos) => (
+                  {userPositions.map((pos) => (
                     <div
                       key={pos.vaultId}
                       className="flex items-center justify-between px-5 py-4 hover:bg-muted/20 transition-colors cursor-pointer border-b border-border last:border-b-0"
-                      onClick={() => navigate(`/vault/${pos.vaultId}`)}
+                      onClick={() => navigate(vaultDetailPath(pos.chainId, pos.mTokenAddress))}
                     >
                       <div className="flex-1">
                         <div className="font-display font-semibold text-foreground text-sm">{pos.vaultName}</div>
@@ -167,7 +139,9 @@ export default function VaultListPage() {
                       <div className="flex items-center gap-8">
                         <div className="text-right">
                           <div className="text-xs text-muted-foreground font-mono">Position</div>
-                          <div className="text-sm font-mono text-foreground font-semibold">{pos.redeemableUSDC.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC</div>
+                          <div className="text-sm font-mono text-foreground font-semibold">
+                            {pos.redeemableUSDC.toLocaleString(undefined, { maximumFractionDigits: 2 })} {pos.underlyingSymbol}
+                          </div>
                           <div className="text-xs font-mono text-muted-foreground">≈ {formatUSDExact(pos.redeemableUSD)}</div>
                         </div>
                         <div className="text-right">
@@ -186,14 +160,14 @@ export default function VaultListPage() {
       )}
 
       <div className="space-y-4">
-        {MOCK_VAULTS.map((vault, i) => (
+        {vaults.map((vault, i) => (
           <motion.div
             key={vault.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.2 + i * 0.1 }}
             className="rounded-xl border border-border bg-card hover:border-primary/30 transition-all duration-300 cursor-pointer group"
-            onClick={() => navigate(`/vault/${vault.id}`)}
+            onClick={() => navigate(vaultDetailPath(vault.chainId, vault.mTokenAddress))}
           >
             <div className="p-6">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
@@ -210,7 +184,7 @@ export default function VaultListPage() {
                     <span className="font-mono">{vault.curator}</span>
                     <span className="text-border">•</span>
                     <Clock className="h-3.5 w-3.5" />
-                    <span className="font-mono">64d track record</span>
+                    <span className="font-mono">{vault.trackRecordDays}d track record</span>
                   </div>
                 </div>
 

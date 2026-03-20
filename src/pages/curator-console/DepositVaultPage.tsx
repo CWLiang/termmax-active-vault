@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { ConfirmActionModal } from "@/components/curator-console/ConfirmActionModal";
+import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
 import { AlertTriangle, Plus } from "lucide-react";
 
 export default function DepositVaultPage() {
+  const { vault } = useCuratorVaultSummary();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState("");
   const [showAddToken, setShowAddToken] = useState(false);
@@ -18,6 +20,7 @@ export default function DepositVaultPage() {
     <div className="p-6 space-y-6 max-w-5xl">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-display font-bold text-foreground">Deposit Vault Settings</h1>
+        {vault && <p className="text-sm text-muted-foreground mt-1 font-mono">{vault.name}</p>}
       </motion.div>
 
       {/* Wallets */}
