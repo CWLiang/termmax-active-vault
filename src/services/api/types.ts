@@ -91,6 +91,7 @@ export interface ActivityItemDto {
   date: string;
   type: string;
   amount: string;
+  mTokenAmount?: string;
   usdValue: string;
   user: string;
   txHash: string;

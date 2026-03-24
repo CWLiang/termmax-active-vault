@@ -288,7 +288,7 @@ export function ConfirmActionModal({
                 <span className="text-muted-foreground shrink-0">{newValueLabel}</span>
                 <span
                   className={`text-right break-all min-w-0 whitespace-pre-line ${
-                    newValueLabel === "New NAV" ? "font-mono" : "text-foreground"
+                    newValueLabel === "New NAV" || newValueLabel === "New Price" ? "font-mono" : "text-foreground"
                   }`}
                 >
                   {newValue}

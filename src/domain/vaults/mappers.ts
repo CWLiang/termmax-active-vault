@@ -44,6 +44,8 @@ export function mapVaultSummaryDto(dto: VaultSummaryDto): VaultSummary {
     trackRecordDays: dto.trackRecordDays,
     underlyingSymbol: dto.underlyingSymbol,
     navPerShare: parseDecimal(dto.navPerShare),
+    totalSupply: parseDecimal(dto.totalSupply),
+    capacityCap: parseDecimal(dto.capacityCap),
   };
 }
 

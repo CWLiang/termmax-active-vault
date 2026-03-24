@@ -4,6 +4,7 @@ import {
   TrendingUp,
   ArrowRightLeft,
   ArrowDownToLine,
+  Activity,
   ChevronLeft,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -23,9 +24,10 @@ import { normalizeVaultAddress } from "@/lib/evmAddress";
 
 const vaultNavItems = [
   { title: "Vault Overview", segment: "overview" as const, icon: Eye },
-  { title: "NAV Management", segment: "nav" as const, icon: TrendingUp, badge: "high" as const },
+  { title: "Price Management", segment: "nav" as const, icon: TrendingUp, badge: "high" as const },
   { title: "Redemption Management", segment: "redemption" as const, icon: ArrowRightLeft, badge: "high" as const },
   { title: "Depsoit Management", segment: "deposit" as const, icon: ArrowDownToLine },
+  { title: "Activity", segment: "activity" as const, icon: Activity },
 ];
 
 export function CuratorSidebar() {
@@ -57,8 +59,7 @@ export function CuratorSidebar() {
           {!collapsed && (
             <div className="px-3 pb-4">
               <div className="flex items-center gap-2">
-                <span className="font-display font-bold text-foreground text-sm">Term</span>
-                <span className="font-display font-bold text-primary text-sm">Max</span>
+                <span className="font-display font-bold text-foreground text-sm">TermMax</span>
               </div>
               <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-widest">
                 Curator Console

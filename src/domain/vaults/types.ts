@@ -17,6 +17,10 @@ export interface VaultSummary {
   underlyingSymbol: string;
   /** NAV per share (underlying units), from API */
   navPerShare: number;
+  /** mToken total supply (token units) */
+  totalSupply: number;
+  /** max supply cap (token units) */
+  capacityCap: number;
 }
 
 export interface UserPositionSummary {

@@ -5,7 +5,7 @@ export function curatorVaultBasePath(chainId: number | string, mTokenAddress: st
   return `/curator-console/vault/${chainId}/${normalizeVaultAddress(mTokenAddress)}`;
 }
 
-export type CuratorVaultSection = "overview" | "nav" | "redemption" | "deposit";
+export type CuratorVaultSection = "overview" | "nav" | "redemption" | "deposit" | "activity";
 
 export function curatorVaultSectionPath(
   chainId: number | string,

@@ -375,7 +375,7 @@ export default function VaultOverviewPage() {
 
   const title = vault?.name ?? "Vault overview";
   const subtitle = vault
-    ? `${vault.curator} · ${vault.trackRecordDays}d track record · ${vault.underlyingSymbol}`
+    ? `${vault.curator} · ${vault.underlyingSymbol}`
     : "Vault not found in API list — check chain / address";
 
   return (
@@ -407,7 +407,7 @@ export default function VaultOverviewPage() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="bg-card border-border">
             <CardContent className="pt-4 pb-4">
-              <div className="text-xs text-muted-foreground">TVL</div>
+              <div className="text-xs text-muted-foreground">NAV</div>
               <div className="text-xl font-mono font-bold text-foreground mt-1">{vault ? formatUSD(tvl) : "—"}</div>
             </CardContent>
           </Card>
@@ -416,7 +416,7 @@ export default function VaultOverviewPage() {
           <Card className="bg-card border-border">
             <CardContent className="pt-4 pb-4">
               <div className="text-xs text-muted-foreground">
-                NAV (USD / {mTokenSymbol ?? "mToken"})
+                Price
               </div>
               <div className="text-xl font-mono font-bold text-foreground mt-1">
                 {vault

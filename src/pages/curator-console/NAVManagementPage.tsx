@@ -4,8 +4,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, AlertTriangle, Copy, ExternalLink } from "lucide-react";
+import { AlertTriangle, Copy, ExternalLink } from "lucide-react";
 import {
   ConfirmActionModal,
   type ConfirmSuccessTxRow,
@@ -225,7 +224,7 @@ export default function NAVManagementPage() {
   const [feedSummaryRows, setFeedSummaryRows] = useState<ConfirmSummaryRow[]>([]);
   const [plannedFeedSteps, setPlannedFeedSteps] = useState<PlannedFeedStep[]>([]);
   const [navSubmitKind, setNavSubmitKind] = useState<"safe" | "force" | null>(null);
-  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("7d");
   const [chainNavSnapshot, setChainNavSnapshot] = useState<ChainNavSnapshot | null>(null);
   const [onChainNavLoading, setOnChainNavLoading] = useState(false);
   const [localNavTxLog, setLocalNavTxLog] = useState<NavHistoryRow[]>([]);
@@ -664,8 +663,8 @@ export default function NAVManagementPage() {
     setConfirmKind("nav");
     setConfirmAction(
       kind === "safe"
-        ? "Submit NAV update (with variation checking)"
-        : "Submit NAV update (bypass variation checking)",
+        ? "Submit Price update (with variation checking)"
+        : "Submit Price update (bypass variation checking)",
     );
     setConfirmValue(navHuman);
     setConfirmActionContractNote(
@@ -1005,17 +1004,17 @@ export default function NAVManagementPage() {
   return (
     <div className="p-6 space-y-6 max-w-5xl">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-display font-bold text-foreground">NAV Management</h1>
+        <h1 className="text-2xl font-display font-bold text-foreground">Price Management</h1>
         {vault && <p className="text-sm text-muted-foreground mt-1 font-mono">{vault.name}</p>}
         {showNavError ? (
           <p className="text-xs text-destructive mt-1">Could not load vault detail — NAV may be from list only.</p>
         ) : null}
       </motion.div>
 
-      {/* Combined Current NAV + Update NAV */}
+      {/* Combined Current Price + Update Price */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="font-display text-sm">NAV</CardTitle>
+          <CardTitle className="font-display text-sm">Price per pUSDC</CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-2">
@@ -1025,10 +1024,7 @@ export default function NAVManagementPage() {
               <div className="text-sm text-muted-foreground font-mono">Reading on-chain NAV…</div>
             ) : displayNav > 0 ? (
               <div className="text-3xl font-mono font-bold text-foreground">
-                ${formatNavPrice(displayNav, 6)}{" "}
-                <span className="text-base text-muted-foreground font-normal">
-                  USD per {mTokenSymbol ?? "mToken"}
-                </span>
+                ${formatNavPrice(displayNav, 6)}
                 {vaultDetail != null && Number.isFinite(vaultDetail.navChange24h) ? (
                   <span
                     className={`ml-2 inline-flex items-center rounded-md px-2 py-0.5 align-middle text-xs font-medium ${
@@ -1037,12 +1033,12 @@ export default function NAVManagementPage() {
                         : "bg-destructive/10 text-destructive"
                     }`}
                   >
-                    24h {vaultDetail.navChange24h >= 0 ? "+" : ""}
+                    {vaultDetail.navChange24h >= 0 ? "+" : ""}
                     {formatDisplayNumber(vaultDetail.navChange24h, {
                       minimumFractionDigits: 0,
                       maximumFractionDigits: 3,
                     })}
-                    %
+                    % (24h)
                   </span>
                 ) : null}
                 {chainNavSnapshot && chainNavSnapshot.txHash ? (
@@ -1059,7 +1055,7 @@ export default function NAVManagementPage() {
                 <>
                   Last updated: {formatUtcTable(new Date(displayLastUpdatedMs).toISOString())} (
                   {formatDistanceToNow(new Date(displayLastUpdatedMs), { addSuffix: true })})
-                  {chainNavSnapshot ? " · on-chain" : ""}
+                  {chainNavSnapshot ? "" : ""}
                 </>
               ) : navLoading ? (
                 "Loading history…"
@@ -1075,7 +1071,7 @@ export default function NAVManagementPage() {
             ) : null}
             <div className="space-y-2 pt-2">
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                On-chain NAV source
+                ON-CHAIN PRICE SOURCE
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <OnChainAddressRow
@@ -1104,7 +1100,7 @@ export default function NAVManagementPage() {
           <div className="space-y-3">
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Update NAV
+                Update Price
               </span>
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
@@ -1151,7 +1147,7 @@ export default function NAVManagementPage() {
             </div>
             <div>
               <label className="text-xs text-muted-foreground">
-                New NAV (USD, {aggregatorDecimals ?? "…"} decimal places)
+                New Price (USD, {aggregatorDecimals ?? "…"} decimal places)
               </label>
               <Input value={newNav} onChange={(e) => setNewNav(e.target.value)} className="font-mono mt-1 h-9" />
             </div>
@@ -1186,7 +1182,7 @@ export default function NAVManagementPage() {
                     navSubmitValueUnchanged
                   }
                   onClick={() => void openNavConfirm("force")}
-                  title="Force submit NAV update"
+                  title="Force submit Price update"
                 >
                   Force submit
                 </Button>
@@ -1194,17 +1190,17 @@ export default function NAVManagementPage() {
             </WalletChainGateOrActions>
             {navChangeExceedsMaxDeviation ? (
               <p className="text-[10px] text-destructive leading-snug">
-                New NAV exceeds Max NAV deviation. Use Force submit if this larger move is intentional.
+                New Price exceeds Max Price deviation. Use Force submit if this larger move is intentional.
               </p>
             ) : null}
           </div>
         </CardContent>
       </Card>
 
-      {/* NAV History chart */}
+      {/* Price History chart */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="font-display text-sm">NAV History</CardTitle>
+          <CardTitle className="font-display text-sm">Price History</CardTitle>
           <div className="flex gap-1">
             {(["7d", "30d", "90d"] as const).map((r) => (
               <Button
@@ -1252,7 +1248,7 @@ export default function NAVManagementPage() {
                       border: "1px solid hsl(220, 15%, 16%)",
                       fontSize: 12,
                     }}
-                    formatter={(value: number) => [`$${formatNavPrice(value, 6)}`, `NAV (USD / ${mTokenSymbol ?? "mToken"})`]}
+                    formatter={(value: number) => [`$${formatNavPrice(value, 6)}`, "Price"]}
                   />
                   <Area
                     type="monotone"
@@ -1270,7 +1266,7 @@ export default function NAVManagementPage() {
               <thead>
                 <tr className="border-b border-border text-muted-foreground">
                   <th className="text-left py-2 font-medium">Date/Time (UTC)</th>
-                  <th className="text-right py-2 font-medium">NAV</th>
+                  <th className="text-right py-2 font-medium">Price</th>
                   <th className="text-right py-2 font-medium">Change</th>
                   <th className="text-right py-2 font-medium">Updated By</th>
                 </tr>
@@ -1342,17 +1338,12 @@ export default function NAVManagementPage() {
         </CardContent>
       </Card>
 
-      {/* Feed Settings */}
-      <Collapsible>
-        <Card className="bg-card border-border">
-          <CollapsibleTrigger className="w-full">
-            <CardHeader className="pb-2 flex flex-row items-center justify-between cursor-pointer">
-              <CardTitle className="font-display text-sm">Advanced: Feed Settings</CardTitle>
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="space-y-4">
+      {/* Price Feed Settings */}
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="font-display text-sm">Price Feed Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
               {canLookupFeedFromVaults && dataFeedAddrLoading ? (
                 <p className="text-xs text-muted-foreground font-mono">
                   Loading DataFeed via mTokenDataFeed() from deposit / redemption vault…
@@ -1452,10 +1443,8 @@ export default function NAVManagementPage() {
                   Save Feed Settings {feedChanged && `(${changedCount} field${changedCount > 1 ? "s" : ""})`}
                 </Button>
               </WalletChainGateOrActions>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+        </CardContent>
+      </Card>
 
       <ConfirmActionModal
         open={confirmOpen}
@@ -1464,7 +1453,7 @@ export default function NAVManagementPage() {
         actionContractNote={confirmKind === "nav" ? confirmActionContractNote : undefined}
         newValue={confirmValue}
         newValueLabel={
-          confirmKind === "nav" ? "New NAV" : confirmKind === "feed" ? "Batch" : "New Value"
+          confirmKind === "nav" ? "New Price" : confirmKind === "feed" ? "Batch" : "New Value"
         }
         contractAddress={
           confirmKind === "feed" && dataFeedAddress
