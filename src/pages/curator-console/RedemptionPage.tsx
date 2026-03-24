@@ -3,37 +3,36 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, Plus, AlertTriangle } from "lucide-react";
+import { ChevronDown, AlertTriangle } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
   ConfirmActionModal,
   type ConfirmModalValueRow,
+  type ConfirmSuccessTxRow,
 } from "@/components/curator-console/ConfirmActionModal";
 import { useAccount, useChainId, usePublicClient, useReadContract, useReadContracts, useWriteContract } from "wagmi";
 import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
 import { useVaultDetailQuery } from "@/hooks/queries/useVaultDetailQuery";
+import { useRedeemRequestsQuery } from "@/hooks/queries/useRedeemRequestsQuery";
 import { manageableVaultAbi } from "@/abis/manageableVault";
 import { mTokenAbi } from "@/abis/mToken";
 import { erc20Abi } from "@/abis/erc20";
-import { formatUnits, isAddress, parseUnits } from "viem";
+import { aggregatorV3DecimalsAbi, dataFeedAbi } from "@/abis/dataFeed";
+import { readAggregatorLatestNav } from "@/lib/readAggregatorLatestNav";
+import { Address, formatUnits, isAddress, parseUnits, zeroAddress } from "viem";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastChainTxSuccess } from "@/lib/toastChainTx";
-import { formatDisplayNumber } from "@/lib/formatNumbers";
-import { showConfirmModalContractDetails } from "@/lib/confirm-modal-env";
+import {
+  formatDisplayNumber,
+  formatNumberInputWithGrouping,
+  stripNumberGrouping,
+} from "@/lib/formatNumbers";
 import { ManageableVaultAddressWithActions } from "@/components/curator-console/ManageableVaultAddressWithActions";
 import {
   PAYMENT_ALLOWANCE_DECIMALS,
@@ -47,13 +46,7 @@ import {
   parseInstantSettingsInputs,
 } from "@/lib/curatorManageableVaultFormat";
 
-const requests = [
-  { id: 1042, address: "0xAB12…", amount: "50,000", date: "2026-03-19" },
-  { id: 1041, address: "0xCD34…", amount: "45,000", date: "2026-03-18" },
-  { id: 1040, address: "0xEF56…", amount: "30,000", date: "2026-03-18" },
-];
-
-const CURRENT_NAV = "1.1162";
+const CURRENT_NAV_FALLBACK = "1.1162";
 
 export default function RedemptionPage() {
   const { address: walletAddress, isConnected } = useAccount();
@@ -62,7 +55,11 @@ export default function RedemptionPage() {
   const publicClient = usePublicClient({ chainId });
   const { mutateAsync: writeContractAsync } = useWriteContract();
   const { data: vaultDetail } = useVaultDetailQuery(valid ? chainId : undefined, valid ? mTokenAddress : undefined);
-  const showContractDevHints = showConfirmModalContractDetails();
+  const {
+    data: redeemRequestsRes,
+    isLoading: redeemRequestsLoading,
+    isError: redeemRequestsError,
+  } = useRedeemRequestsQuery(valid ? chainId : undefined, valid ? mTokenAddress : undefined);
   const vaultAddress = vaultDetail?.redemptionVaultAddress;
   const mToken = isAddress(mTokenAddress) ? mTokenAddress : undefined;
 
@@ -236,13 +233,20 @@ export default function RedemptionPage() {
   useEffect(() => {
     if (instantDailyLimit != null) {
       setInstantDailyLimitInput(
-        formatUnits(instantDailyLimit, mTokenDecimals != null ? Number(mTokenDecimals) : 18),
+        formatNumberInputWithGrouping(
+          formatUnits(instantDailyLimit, mTokenDecimals != null ? Number(mTokenDecimals) : 18),
+        ),
       );
     }
   }, [instantDailyLimit, mTokenDecimals]);
   useEffect(() => {
     if (onChainVariationTolerance != null) {
-      setVariationToleranceInput((Number(onChainVariationTolerance) / 100).toFixed(2));
+      setVariationToleranceInput(
+        formatDisplayNumber(Number(onChainVariationTolerance) / 100, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        }),
+      );
     }
   }, [onChainVariationTolerance]);
   const walletRows = useMemo(
@@ -252,11 +256,35 @@ export default function RedemptionPage() {
     ],
     [feeReceiver, tokensReceiver],
   );
-  const [selected, setSelected] = useState<number[]>([]);
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const pendingRequests = useMemo(() => {
+    const rows = redeemRequestsRes?.items ?? [];
+    return rows.map((r) => {
+      const parsedAmount = Number(r.amountMTokenIn);
+      const amount =
+        Number.isFinite(parsedAmount)
+          ? formatDisplayNumber(parsedAmount, { maximumFractionDigits: 6 })
+          : r.amountMTokenIn;
+      const date = r.createdAt.includes("T") ? r.createdAt.slice(0, 10) : r.createdAt;
+      return {
+        id: r.requestId,
+        address: shortAddr(r.sender),
+        amount,
+        date,
+      };
+    });
+  }, [redeemRequestsRes]);
+  const pendingRequestCount = redeemRequestsRes?.totalItems ?? 0;
+  const [selected, setSelected] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  useEffect(() => {
+    const idSet = new Set(pendingRequests.map((r) => r.id));
+    setSelected((prev) => prev.filter((id) => idSet.has(id)));
+    setExpanded((prev) => (prev != null && idSet.has(prev) ? prev : null));
+  }, [pendingRequests]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState("");
   const [confirmValue, setConfirmValue] = useState("");
+  const [confirmValueLabel, setConfirmValueLabel] = useState<string | undefined>(undefined);
   const [confirmValueRows, setConfirmValueRows] = useState<ConfirmModalValueRow[] | null>(null);
   const [confirmContractNote, setConfirmContractNote] = useState("");
   /** Function + args footnote under Action (dev-gated in modal). */
@@ -269,8 +297,8 @@ export default function RedemptionPage() {
       | "setInstantFee"
       | "setInstantDailyLimit"
       | "setVariationTolerance"
-      | "addPaymentToken"
-      | "removePaymentToken"
+      | "safeBulkApproveRequestAtSavedRate"
+      | "safeBulkApproveRequest"
       | "changeTokenFee"
       | "changeTokenAllowance"
       | "withdrawToken";
@@ -286,6 +314,7 @@ export default function RedemptionPage() {
   }>>([]);
   const [pendingProgressMessage, setPendingProgressMessage] = useState<string | undefined>(undefined);
   const [instantBatchProgress, setInstantBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  const [confirmSuccessTxRows, setConfirmSuccessTxRows] = useState<ConfirmSuccessTxRow[]>([]);
   const [walletEditOpen, setWalletEditOpen] = useState(false);
   const [walletEditKind, setWalletEditKind] = useState<"management" | "fee" | "redeemer" | null>(null);
   const [walletEditValue, setWalletEditValue] = useState("");
@@ -306,20 +335,16 @@ export default function RedemptionPage() {
   const [rateModalOpen, setRateModalOpen] = useState(false);
   const [rateModalAction, setRateModalAction] = useState("");
   const [rateModalLabel, setRateModalLabel] = useState("");
-  const [newRate, setNewRate] = useState(CURRENT_NAV);
-  const [rateModalBaselineNav, setRateModalBaselineNav] = useState(CURRENT_NAV);
+  const [currentOracleNav, setCurrentOracleNav] = useState(CURRENT_NAV_FALLBACK);
+  const [newRate, setNewRate] = useState(CURRENT_NAV_FALLBACK);
+  const [rateModalBaselineNav, setRateModalBaselineNav] = useState(CURRENT_NAV_FALLBACK);
+  const [rateModalBulkMode, setRateModalBulkMode] = useState<"bulk-new-rate" | null>(null);
 
   // Vault settings
-  const [showAddToken, setShowAddToken] = useState(false);
   const [instantFeeInput, setInstantFeeInput] = useState("0.10");
   const [instantDailyLimitInput, setInstantDailyLimitInput] = useState("500000");
   const [variationToleranceInput, setVariationToleranceInput] = useState("1.0");
-  const [addTokenAddress, setAddTokenAddress] = useState("");
-  const [addTokenDataFeed, setAddTokenDataFeed] = useState("");
-  const [addTokenFeeInput, setAddTokenFeeInput] = useState("0.10");
-  const [addTokenAllowanceInput, setAddTokenAllowanceInput] = useState("500000");
-  const [addTokenStable, setAddTokenStable] = useState(false);
-  const [withdrawTokenAddress, setWithdrawTokenAddress] = useState("");
+  const withdrawTokenAddress = paymentTokenRows[0]?.token ?? "";
   const [withdrawAmountInput, setWithdrawAmountInput] = useState("");
   const [withdrawToAddress, setWithdrawToAddress] = useState("");
 
@@ -328,22 +353,6 @@ export default function RedemptionPage() {
     const t = withdrawTokenAddress.trim().toLowerCase();
     return paymentTokenRows.find((r) => r.token.toLowerCase() === t)?.decimals;
   }, [withdrawTokenAddress, paymentTokenRows]);
-
-  useEffect(() => {
-    const first = paymentTokenRows[0]?.token;
-    if (!first) {
-      setWithdrawTokenAddress("");
-      return;
-    }
-    if (!withdrawTokenAddress.trim()) {
-      setWithdrawTokenAddress(first);
-      return;
-    }
-    const inList = paymentTokenRows.some(
-      (r) => r.token.toLowerCase() === withdrawTokenAddress.toLowerCase(),
-    );
-    if (!inList) setWithdrawTokenAddress(first);
-  }, [paymentTokenRows, withdrawTokenAddress]);
 
   const withdrawErc20Addr =
     withdrawTokenAddress.trim() && isAddress(withdrawTokenAddress.trim())
@@ -372,10 +381,67 @@ export default function RedemptionPage() {
   const withdrawVaultTokenBalance =
     typeof withdrawVaultTokenBalanceRaw === "bigint" ? withdrawVaultTokenBalanceRaw : undefined;
 
+  const { data: redemptionDataFeedAddressRaw } = useReadContract({
+    address: vaultAddress as `0x${string}` | undefined,
+    abi: manageableVaultAbi,
+    functionName: "mTokenDataFeed",
+    chainId,
+    query: { enabled: Boolean(vaultAddress) },
+  });
+  const redemptionDataFeedAddress =
+    typeof redemptionDataFeedAddressRaw === "string" && isAddress(redemptionDataFeedAddressRaw)
+      ? (redemptionDataFeedAddressRaw as Address)
+      : undefined;
+  const { data: redemptionAggregatorRaw } = useReadContract({
+    address: redemptionDataFeedAddress,
+    abi: dataFeedAbi,
+    functionName: "aggregator",
+    chainId,
+    query: { enabled: Boolean(redemptionDataFeedAddress) },
+  });
+  const redemptionAggregator =
+    typeof redemptionAggregatorRaw === "string" &&
+    isAddress(redemptionAggregatorRaw) &&
+    redemptionAggregatorRaw !== zeroAddress
+      ? (redemptionAggregatorRaw as Address)
+      : undefined;
+  const { data: redemptionAggregatorDecimals } = useReadContract({
+    address: redemptionAggregator,
+    abi: aggregatorV3DecimalsAbi,
+    functionName: "decimals",
+    chainId,
+    query: { enabled: Boolean(redemptionAggregator) },
+  });
+
+  useEffect(() => {
+    if (
+      !publicClient ||
+      !redemptionAggregator ||
+      redemptionAggregatorDecimals == null ||
+      typeof chainId !== "number"
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void readAggregatorLatestNav(publicClient, {
+      address: redemptionAggregator,
+      chainId,
+      decimals: Number(redemptionAggregatorDecimals),
+    }).then((snap) => {
+      if (cancelled || !snap) return;
+      setCurrentOracleNav(
+        formatDisplayNumber(snap.nav, { minimumFractionDigits: 0, maximumFractionDigits: 6 }),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [publicClient, redemptionAggregator, redemptionAggregatorDecimals, chainId]);
+
   const withdrawParsedAmountRaw = useMemo(() => {
     if (withdrawTokenDecimals == null) return null;
     try {
-      return parseUnits(withdrawAmountInput.trim() || "0", withdrawTokenDecimals);
+      return parseUnits(stripNumberGrouping(withdrawAmountInput) || "0", withdrawTokenDecimals);
     } catch {
       return null;
     }
@@ -413,7 +479,7 @@ export default function RedemptionPage() {
     if (!vaultAddress) return false;
     if (variationToleranceLoading || variationToleranceReadError) return false;
     if (onChainVariationTolerance === undefined) return false;
-    const pct = Number(variationToleranceInput);
+    const pct = Number(stripNumberGrouping(variationToleranceInput));
     if (!Number.isFinite(pct) || pct < 0) return false;
     const toleranceRaw = BigInt(Math.round(pct * 100));
     return toleranceRaw !== onChainVariationTolerance;
@@ -425,27 +491,15 @@ export default function RedemptionPage() {
     variationToleranceInput,
   ]);
 
-  const addPaymentTokenCanSubmit = useMemo(() => {
-    if (!isAddress(addTokenAddress.trim()) || !isAddress(addTokenDataFeed.trim())) return false;
-    const feePct = Number(addTokenFeeInput);
-    if (!Number.isFinite(feePct) || feePct < 0) return false;
-    try {
-      parseUnits(addTokenAllowanceInput || "0", PAYMENT_ALLOWANCE_DECIMALS);
-    } catch {
-      return false;
-    }
-    return true;
-  }, [addTokenAddress, addTokenDataFeed, addTokenFeeInput, addTokenAllowanceInput]);
-
   const withdrawTokenCanSubmit = useMemo(() => {
-    if (!isAddress(withdrawTokenAddress.trim()) || !isAddress(withdrawToAddress.trim())) return false;
+    if (!withdrawErc20Addr || !isAddress(withdrawToAddress.trim())) return false;
     if (withdrawTokenDecimals == null) return false;
     if (withdrawParsedAmountRaw == null || withdrawParsedAmountRaw <= 0n) return false;
     if (!withdrawVaultBalanceReady) return false;
     if (withdrawVaultTokenBalance === undefined) return false;
     return withdrawParsedAmountRaw <= withdrawVaultTokenBalance;
   }, [
-    withdrawTokenAddress,
+    withdrawErc20Addr,
     withdrawToAddress,
     withdrawTokenDecimals,
     withdrawParsedAmountRaw,
@@ -462,7 +516,7 @@ export default function RedemptionPage() {
   const paymentTokenEditFeeCanContinue = useMemo(() => {
     if (paymentTokenEditKind !== "fee") return false;
     if (!isAddress(paymentTokenEditToken) || paymentTokenEditOnChainFee == null) return false;
-    const pct = Number(paymentTokenEditInput);
+    const pct = Number(stripNumberGrouping(paymentTokenEditInput));
     if (!Number.isFinite(pct) || pct < 0 || pct > 100) return false;
     const feeRaw = BigInt(Math.round(pct * 100));
     if (feeRaw > 10000n) return false;
@@ -479,7 +533,7 @@ export default function RedemptionPage() {
     if (!isAddress(paymentTokenEditToken) || paymentTokenEditOnChainAllowance == null) return false;
     let raw: bigint;
     try {
-      raw = parseUnits(paymentTokenEditInput.trim() || "0", PAYMENT_ALLOWANCE_DECIMALS);
+      raw = parseUnits(stripNumberGrouping(paymentTokenEditInput) || "0", PAYMENT_ALLOWANCE_DECIMALS);
     } catch {
       return false;
     }
@@ -503,13 +557,13 @@ export default function RedemptionPage() {
     return newRate.trim() !== rateModalBaselineNav.trim();
   }, [newRate, rateModalBaselineNav]);
 
-  const toggleSelect = (id: number) => {
+  const toggleSelect = (id: string) => {
     setSelected((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
   };
 
   const selectAll = () => {
-    if (selected.length === requests.length) setSelected([]);
-    else setSelected(requests.map((r) => r.id));
+    if (selected.length === pendingRequests.length) setSelected([]);
+    else setSelected(pendingRequests.map((r) => r.id));
   };
 
   const openConfirm = (
@@ -518,9 +572,12 @@ export default function RedemptionPage() {
     contractNote?: string,
     pinContractNoteUnderAction?: boolean,
     valueRows?: ConfirmModalValueRow[] | null,
+    valueLabel?: string,
   ) => {
+    setConfirmSuccessTxRows([]);
     setConfirmAction(action);
     setConfirmValue(value || "");
+    setConfirmValueLabel(valueLabel);
     setConfirmValueRows(
       valueRows != null && valueRows.length > 0 ? valueRows : null,
     );
@@ -565,12 +622,18 @@ export default function RedemptionPage() {
         : walletEditKind === "fee"
           ? "Change Fee Wallet"
           : "Change Redeemer Wallet";
+    const newValueLabel =
+      walletEditKind === "management"
+        ? "New Management Wallet"
+        : walletEditKind === "fee"
+          ? "New Fee Wallet"
+          : "New Redeemer Wallet";
     setPendingVaultCall({
       functionName,
       args: [t as `0x${string}`],
       successTitle: `${label} updated`,
     });
-    openConfirm(label, t, `${functionName}(${t})`, true);
+    openConfirm(label, t, `${functionName}(${t})`, true, null, newValueLabel);
   };
 
   const openEditPaymentTokenFee = (
@@ -595,7 +658,9 @@ export default function RedemptionPage() {
     setPaymentTokenEditKind("allowance");
     setPaymentTokenEditToken(token);
     setPaymentTokenEditSymbol(symbol);
-    setPaymentTokenEditInput(formatUnits(allowanceRaw, PAYMENT_ALLOWANCE_DECIMALS));
+    setPaymentTokenEditInput(
+      formatNumberInputWithGrouping(formatUnits(allowanceRaw, PAYMENT_ALLOWANCE_DECIMALS)),
+    );
     setPaymentTokenEditOnChainFee(null);
     setPaymentTokenEditOnChainAllowance(allowanceRaw);
     setPaymentTokenEditOpen(true);
@@ -604,7 +669,7 @@ export default function RedemptionPage() {
   const submitPaymentTokenEdit = () => {
     if (!paymentTokenEditKind || !isAddress(paymentTokenEditToken)) return;
     if (paymentTokenEditKind === "fee") {
-      const pct = Number(paymentTokenEditInput);
+      const pct = Number(stripNumberGrouping(paymentTokenEditInput));
       if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
         toast.error("Fee must be between 0% and 100%.");
         return;
@@ -618,18 +683,21 @@ export default function RedemptionPage() {
       setPaymentTokenEditKind(null);
       queueVaultCall(
         "Change Payment Token Fee",
-        `${paymentTokenEditSymbol}: ${formatDisplayNumber(pct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
+        `${formatDisplayNumber(pct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
         "changeTokenFee",
         [paymentTokenEditToken, feeRaw],
         "Payment token fee updated",
         `changeTokenFee(${paymentTokenEditToken}, ${feeRaw.toString()})`,
+        true,
+        null,
+        "New Payment Token Fee",
       );
       return;
     }
     let allowanceRaw: bigint;
     try {
       allowanceRaw = parseUnits(
-        paymentTokenEditInput.trim() || "0",
+        stripNumberGrouping(paymentTokenEditInput) || "0",
         PAYMENT_ALLOWANCE_DECIMALS,
       );
     } catch {
@@ -642,21 +710,31 @@ export default function RedemptionPage() {
     }
     setPaymentTokenEditOpen(false);
     setPaymentTokenEditKind(null);
+    const allowanceDisplay = (() => {
+      const raw = formatUnits(allowanceRaw, PAYMENT_ALLOWANCE_DECIMALS);
+      const sign = raw.startsWith("-") ? "-" : "";
+      const unsigned = sign ? raw.slice(1) : raw;
+      const [intPart, fracPart = ""] = unsigned.split(".");
+      const groupedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      const trimmedFrac = fracPart.replace(/0+$/, "");
+      return `${sign}${groupedInt}${trimmedFrac ? `.${trimmedFrac}` : ""}`;
+    })();
     queueVaultCall(
       "Change Payment Token Allowance",
-      `${paymentTokenEditSymbol}: ${formatUnits(allowanceRaw, PAYMENT_ALLOWANCE_DECIMALS)}${
-        showContractDevHints ? " (stored with 18 decimal places)" : ""
-      }`,
+      allowanceDisplay,
       "changeTokenAllowance",
       [paymentTokenEditToken, allowanceRaw],
       "Payment token allowance updated",
       `changeTokenAllowance(${paymentTokenEditToken}, ${allowanceRaw.toString()})`,
+      true,
+      null,
+      "New Allowance",
     );
   };
 
   const openRateModal = (action: string, label: string) => {
-    setRateModalBaselineNav(CURRENT_NAV);
-    setNewRate(CURRENT_NAV);
+    setRateModalBaselineNav(currentOracleNav);
+    setNewRate(currentOracleNav);
     setRateModalAction(action);
     setRateModalLabel(label);
     setRateModalOpen(true);
@@ -664,6 +742,47 @@ export default function RedemptionPage() {
 
   const submitRateModal = () => {
     setRateModalOpen(false);
+    if (rateModalBulkMode === "bulk-new-rate") {
+      if (selected.length === 0) {
+        toast.error("Select at least one request.");
+        return;
+      }
+      const requestIds: bigint[] = [];
+      for (const id of selected) {
+        if (!/^\d+$/.test(id)) {
+          toast.error(`Invalid request id: ${id}`);
+          return;
+        }
+        requestIds.push(BigInt(id));
+      }
+      let newRateRaw: bigint;
+      try {
+        newRateRaw = parseUnits(stripNumberGrouping(newRate) || "0", 18);
+      } catch {
+        toast.error("New rate is invalid.");
+        return;
+      }
+      if (newRateRaw <= 0n) {
+        toast.error("New rate must be greater than 0.");
+        return;
+      }
+      queueVaultCall(
+        `Bulk Approve at New Rate (#${selected.join(", #")})`,
+        `${selected.length} requests at rate ${formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 6,
+        })}`,
+        "safeBulkApproveRequest",
+        [requestIds, newRateRaw],
+        "Bulk approve at new rate submitted",
+        `safeBulkApproveRequest([${requestIds.map((v) => v.toString()).join(", ")}], ${newRateRaw.toString()})`,
+        true,
+        null,
+        "New Rate",
+      );
+      setRateModalBulkMode(null);
+      return;
+    }
     openConfirm(rateModalAction, `Rate: $${newRate}`);
   };
 
@@ -678,6 +797,7 @@ export default function RedemptionPage() {
     /** When false, contract note shows under Summary / New value instead of under Action. */
     pinContractNoteUnderAction = true,
     valueRows?: ConfirmModalValueRow[] | null,
+    valueLabel?: string,
   ) => {
     setPendingVaultCall({ functionName, args, successTitle });
     const hasRows = valueRows != null && valueRows.length > 0;
@@ -687,6 +807,7 @@ export default function RedemptionPage() {
       contractNote,
       pinContractNoteUnderAction,
       hasRows ? valueRows : null,
+      valueLabel,
     );
   };
 
@@ -719,9 +840,7 @@ export default function RedemptionPage() {
         functionName: "setInstantFee",
         args: [feeRaw],
         successTitle: "Instant fee updated",
-        human: `Instant fee: ${formatDisplayNumber(feePercent, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%${
-          showContractDevHints ? " (stored on-chain as percent × 100)" : ""
-        }`,
+        human: `Instant fee: ${formatDisplayNumber(feePercent, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
         contractNote: `setInstantFee(${feeRaw.toString()})`,
       });
     }
@@ -730,9 +849,7 @@ export default function RedemptionPage() {
         functionName: "setInstantDailyLimit",
         args: [dailyLimit],
         successTitle: "Instant daily limit updated",
-        human: `Instant daily limit: ${instantDailyLimitInput} ${mTokenSymbol ?? "mToken"}${
-          showContractDevHints ? ` (token ${mTokenDecimals ?? 18} decimals)` : ""
-        }`,
+        human: `Instant daily limit: ${instantDailyLimitInput} ${mTokenSymbol ?? "mToken"}`,
         contractNote: `setInstantDailyLimit(${dailyLimit.toString()})`,
       });
     }
@@ -748,54 +865,28 @@ export default function RedemptionPage() {
   };
 
   const handleSaveVariationTolerance = () => {
-    const pct = Number(variationToleranceInput);
+    const pct = Number(stripNumberGrouping(variationToleranceInput));
     if (!Number.isFinite(pct) || pct < 0) {
       toast.error("Variation tolerance must be a valid non-negative percent.");
       return;
     }
     const toleranceRaw = BigInt(Math.round(pct * 100));
     queueVaultCall(
-      "Save Variation Tolerance",
-      `Safe-approve tolerance: ${formatDisplayNumber(pct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
+      "Set Variation Tolerance",
+      `${formatDisplayNumber(pct, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`,
       "setVariationTolerance",
       [toleranceRaw],
       "Variation tolerance updated",
       `setVariationTolerance(${toleranceRaw.toString()})`,
       false,
-    );
-  };
-
-  const handleAddPaymentToken = () => {
-    if (!isAddress(addTokenAddress) || !isAddress(addTokenDataFeed)) {
-      toast.error("Token and DataFeed must be valid addresses.");
-      return;
-    }
-    const feePct = Number(addTokenFeeInput);
-    if (!Number.isFinite(feePct) || feePct < 0) {
-      toast.error("Fee must be a valid non-negative percent.");
-      return;
-    }
-    let allowanceRaw: bigint;
-    try {
-      allowanceRaw = parseUnits(addTokenAllowanceInput || "0", PAYMENT_ALLOWANCE_DECIMALS);
-    } catch {
-      toast.error("Allowance is invalid.");
-      return;
-    }
-    const feeRaw = BigInt(Math.round(feePct * 100));
-    queueVaultCall(
-      "Add Payment Token",
-      `Add token ${shortAddr(addTokenAddress)}, oracle ${shortAddr(addTokenDataFeed)}, fee ${formatDisplayNumber(feePct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%, allowance ${addTokenAllowanceInput}, stable: ${addTokenStable ? "yes" : "no"}`,
-      "addPaymentToken",
-      [addTokenAddress as `0x${string}`, addTokenDataFeed as `0x${string}`, feeRaw, allowanceRaw, addTokenStable],
-      "Payment token added",
-      `addPaymentToken(${addTokenAddress}, ${addTokenDataFeed}, ${feeRaw.toString()}, ${allowanceRaw.toString()}, ${addTokenStable})`,
+      null,
+      "New Variation Tolerance",
     );
   };
 
   const handleWithdrawToken = () => {
-    if (!isAddress(withdrawTokenAddress) || !isAddress(withdrawToAddress)) {
-      toast.error("Select a payment token and enter a valid Recipient address.");
+    if (!withdrawErc20Addr || !isAddress(withdrawToAddress)) {
+      toast.error("Payment token unavailable or recipient address is invalid.");
       return;
     }
     if (withdrawTokenDecimals == null) {
@@ -804,7 +895,7 @@ export default function RedemptionPage() {
     }
     let amountRaw: bigint;
     try {
-      amountRaw = parseUnits(withdrawAmountInput || "0", withdrawTokenDecimals);
+      amountRaw = parseUnits(stripNumberGrouping(withdrawAmountInput) || "0", withdrawTokenDecimals);
     } catch {
       toast.error("Withdraw amount is invalid for this token’s decimals.");
       return;
@@ -821,16 +912,16 @@ export default function RedemptionPage() {
       return;
     }
     const sym =
-      paymentTokenRows.find((r) => r.token.toLowerCase() === withdrawTokenAddress.toLowerCase())?.symbol ??
-      shortAddr(withdrawTokenAddress);
+      paymentTokenRows.find((r) => r.token.toLowerCase() === withdrawErc20Addr.toLowerCase())?.symbol ??
+      shortAddr(withdrawErc20Addr);
     const amountHuman = formatAmount(amountRaw, withdrawTokenDecimals, 6);
     queueVaultCall(
       "Withdraw Token",
       "",
       "withdrawToken",
-      [withdrawTokenAddress as `0x${string}`, amountRaw, withdrawToAddress as `0x${string}`],
+      [withdrawErc20Addr, amountRaw, withdrawToAddress as `0x${string}`],
       "Token withdrawn",
-      `withdrawToken(${withdrawTokenAddress}, ${amountRaw.toString()}, ${withdrawToAddress})`,
+      `withdrawToken(${withdrawErc20Addr}, ${amountRaw.toString()}, ${withdrawToAddress})`,
       true,
       [
         { label: "Amount", value: `${amountHuman} ${sym}` },
@@ -850,48 +941,68 @@ export default function RedemptionPage() {
     if (typeof chainId === "number" && walletChainId !== chainId) {
       throw new Error(`Switch wallet to chain ${chainId}.`);
     }
-    const hash = await writeContractAsync({
-      address: vaultAddress as `0x${string}`,
-      abi: manageableVaultAbi,
-      functionName: pendingVaultCall.functionName,
-      args: pendingVaultCall.args,
-      chainId,
-    });
-    if (publicClient) {
-      await publicClient.waitForTransactionReceipt({ hash });
+    try {
+      // Single-call actions should not appear as multi-tx batch progress.
+      setPendingProgressMessage("Submit in your wallet and wait for the transaction to be mined.");
+      const hash = await writeContractAsync({
+        address: vaultAddress as `0x${string}`,
+        abi: manageableVaultAbi,
+        functionName: pendingVaultCall.functionName,
+        args: pendingVaultCall.args,
+        chainId,
+      });
+      setPendingProgressMessage("Transaction submitted, waiting for confirmation.");
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash });
+      }
+      setPendingProgressMessage("Refreshing on-chain state.");
+      const refetchPaymentList = Promise.resolve();
+      const refetchPaymentConfigs =
+        pendingVaultCall.functionName === "changeTokenFee" ||
+        pendingVaultCall.functionName === "changeTokenAllowance"
+          ? refetchTokensConfigs()
+          : Promise.resolve();
+      const refetchWithdrawBalance =
+        pendingVaultCall.functionName === "withdrawToken" ? refetchWithdrawVaultTokenBalance() : Promise.resolve();
+      await Promise.all([
+        refetchTokensReceiver(),
+        refetchFeeReceiver(),
+        refetchRequestRedeemer(),
+        refetchVariationTolerance(),
+        refetchInstantFee(),
+        refetchInstantDailyLimit(),
+        refetchPaymentList,
+        refetchPaymentConfigs,
+        refetchWithdrawBalance,
+      ]);
+      if (typeof chainId === "number") {
+        toastChainTxSuccess(pendingVaultCall.successTitle, chainId, hash);
+      } else {
+        toast.success(pendingVaultCall.successTitle);
+      }
+      const successLabel: Record<typeof pendingVaultCall.functionName, string> = {
+        setTokensReceiver: "Set Management Wallet Tx",
+        setFeeReceiver: "Set Fee Wallet Tx",
+        setRequestRedeemer: "Set Redeemer Wallet Tx",
+        setInstantFee: "Set Instant Fee Tx",
+        setInstantDailyLimit: "Set Instant Daily Limit Tx",
+        setVariationTolerance: "Set Variation Tolerance Tx",
+        safeBulkApproveRequestAtSavedRate: "Bulk Approve at Saved Rate Tx",
+        safeBulkApproveRequest: "Bulk Approve Tx",
+        changeTokenFee: "Change Payment Token Fee Tx",
+        changeTokenAllowance: "Change Payment Token Allowance Tx",
+        withdrawToken: "Withdraw Token Tx",
+      };
+      setConfirmSuccessTxRows([{ label: successLabel[pendingVaultCall.functionName], hash }]);
+      if (pendingVaultCall.functionName === "withdrawToken") {
+        setWithdrawAmountInput("");
+        setWithdrawToAddress("");
+      }
+      setPendingVaultCall(null);
+    } finally {
+      setPendingProgressMessage(undefined);
+      setInstantBatchProgress(null);
     }
-    const refetchPaymentList =
-      pendingVaultCall.functionName === "addPaymentToken" ||
-      pendingVaultCall.functionName === "removePaymentToken"
-        ? refetchPaymentTokens()
-        : Promise.resolve();
-    const refetchPaymentConfigs =
-      pendingVaultCall.functionName === "changeTokenFee" ||
-      pendingVaultCall.functionName === "changeTokenAllowance"
-        ? refetchTokensConfigs()
-        : Promise.resolve();
-    const refetchWithdrawBalance =
-      pendingVaultCall.functionName === "withdrawToken" ? refetchWithdrawVaultTokenBalance() : Promise.resolve();
-    await Promise.all([
-      refetchTokensReceiver(),
-      refetchFeeReceiver(),
-      refetchRequestRedeemer(),
-      refetchVariationTolerance(),
-      refetchPaymentList,
-      refetchPaymentConfigs,
-      refetchWithdrawBalance,
-    ]);
-    if (typeof chainId === "number") {
-      toastChainTxSuccess(pendingVaultCall.successTitle, chainId, hash);
-    } else {
-      toast.success(pendingVaultCall.successTitle);
-    }
-    if (pendingVaultCall.functionName === "withdrawToken") {
-      setWithdrawAmountInput("");
-      setWithdrawToAddress("");
-    }
-    setPendingVaultCall(null);
-    setPendingProgressMessage(undefined);
   };
 
   const runPendingInstantSteps = async () => {
@@ -906,6 +1017,7 @@ export default function RedemptionPage() {
       throw new Error(`Switch wallet to chain ${chainId}.`);
     }
     const total = pendingInstantSteps.length;
+    const successRows: ConfirmSuccessTxRow[] = [];
     try {
       for (let i = 0; i < total; i += 1) {
         const step = pendingInstantSteps[i];
@@ -932,6 +1044,12 @@ export default function RedemptionPage() {
         } else {
           toast.success(step.successTitle);
         }
+        const successLabel =
+          step.functionName === "setInstantFee"
+            ? "Set Instant Fee Tx"
+            : "Set Instant Daily Limit Tx";
+        successRows.push({ label: successLabel, hash });
+        setConfirmSuccessTxRows([...successRows]);
       }
       await Promise.all([refetchInstantFee(), refetchInstantDailyLimit()]);
     } finally {
@@ -953,7 +1071,9 @@ export default function RedemptionPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
               <span className="text-xs text-muted-foreground">Pending Requests</span>
-              <div className="font-mono font-bold text-foreground text-lg">3</div>
+              <div className="font-mono font-bold text-foreground text-lg">
+                {redeemRequestsLoading ? "…" : pendingRequestCount}
+              </div>
             </div>
             <div>
               <span className="text-xs text-muted-foreground">Total Supply</span>
@@ -981,15 +1101,58 @@ export default function RedemptionPage() {
           <CardTitle className="font-display text-sm">Pending Requests</CardTitle>
           <div className="flex gap-2 flex-wrap">
             <Button size="sm" className="text-xs" disabled={selected.length === 0}
-              onClick={() => openConfirm(`Bulk Approve at Oracle NAV (${selectedIds})`, `Rate: $${CURRENT_NAV}`)}>
+              onClick={() => {
+                const requestIds: bigint[] = [];
+                for (const id of selected) {
+                  if (!/^\d+$/.test(id)) {
+                    toast.error(`Invalid request id: ${id}`);
+                    return;
+                  }
+                  requestIds.push(BigInt(id));
+                }
+                queueVaultCall(
+                  `Bulk Approve at Oracle NAV (${selectedIds})`,
+                  `${selected.length} requests`,
+                  "safeBulkApproveRequest",
+                  [requestIds],
+                  "Bulk approve submitted",
+                  `safeBulkApproveRequest([${requestIds.map((v) => v.toString()).join(", ")}])`,
+                  true,
+                  null,
+                  "Requests",
+                );
+              }}>
               Bulk Approve
             </Button>
             <Button size="sm" variant="outline" className="text-xs" disabled={selected.length === 0}
-              onClick={() => openConfirm(`Bulk Approve at Saved Rate (${selectedIds})`)}>
+              onClick={() => {
+                const requestIds: bigint[] = [];
+                for (const id of selected) {
+                  if (!/^\d+$/.test(id)) {
+                    toast.error(`Invalid request id: ${id}`);
+                    return;
+                  }
+                  requestIds.push(BigInt(id));
+                }
+                queueVaultCall(
+                  `Bulk Approve at Saved Rate (${selectedIds})`,
+                  `${selected.length} requests`,
+                  "safeBulkApproveRequestAtSavedRate",
+                  [requestIds],
+                  "Bulk approve at saved rate submitted",
+                  `safeBulkApproveRequestAtSavedRate([${requestIds.map((v) => v.toString()).join(", ")}])`,
+                  true,
+                  null,
+                  "Requests",
+                );
+              }}>
               Bulk Approve at Saved Rate
             </Button>
             <Button size="sm" variant="outline" className="text-xs" disabled={selected.length === 0}
-              onClick={() => openRateModal(`Bulk Approve at New Rate (${selectedIds})`, "Bulk Approve at New Rate")}>
+              onClick={() => {
+                setRateModalBulkMode("bulk-new-rate");
+                openRateModal(`Bulk Approve at New Rate (${selectedIds})`, "Bulk Approve at New Rate");
+              }}>
               Bulk Approve at New Rate
             </Button>
           </div>
@@ -999,16 +1162,19 @@ export default function RedemptionPage() {
             <thead>
               <tr className="border-b border-border text-xs text-muted-foreground">
                 <th className="py-2 w-8">
-                  <Checkbox checked={selected.length === requests.length && requests.length > 0} onCheckedChange={selectAll} />
+                  <Checkbox
+                    checked={selected.length === pendingRequests.length && pendingRequests.length > 0}
+                    onCheckedChange={selectAll}
+                  />
                 </th>
                 <th className="text-left py-2 font-medium">#</th>
                 <th className="text-left py-2 font-medium">Address</th>
-                <th className="text-right py-2 font-medium">Amount (pUSDC)</th>
+                <th className="text-right py-2 font-medium">Amount ({mTokenSymbol ?? "mToken"})</th>
                 <th className="text-right py-2 font-medium">Requested At</th>
               </tr>
             </thead>
             <tbody>
-              {requests.map((r) => (
+              {pendingRequests.map((r) => (
                 <>{/* eslint-disable-next-line react/jsx-key */}
                   <tr key={r.id} className="border-b border-border/50 cursor-pointer hover:bg-secondary/30"
                     onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
@@ -1046,6 +1212,27 @@ export default function RedemptionPage() {
                   )}
                 </>
               ))}
+              {!redeemRequestsLoading && !redeemRequestsError && pendingRequests.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                    No pending redeem requests.
+                  </td>
+                </tr>
+              ) : null}
+              {redeemRequestsLoading ? (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                    Loading pending requests...
+                  </td>
+                </tr>
+              ) : null}
+              {redeemRequestsError ? (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-sm text-destructive">
+                    Failed to load pending requests.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </CardContent>
@@ -1123,11 +1310,19 @@ export default function RedemptionPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-muted-foreground">Instant Fee (%)</label>
-              <Input value={instantFeeInput} onChange={(e) => setInstantFeeInput(e.target.value)} className="font-mono mt-1" />
+              <Input
+                value={instantFeeInput}
+                onChange={(e) => setInstantFeeInput(formatNumberInputWithGrouping(e.target.value))}
+                className="font-mono mt-1"
+              />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Instant Daily Limit ({mTokenSymbol ?? "mToken"})</label>
-              <Input value={instantDailyLimitInput} onChange={(e) => setInstantDailyLimitInput(e.target.value)} className="font-mono mt-1" />
+              <Input
+                value={instantDailyLimitInput}
+                onChange={(e) => setInstantDailyLimitInput(formatNumberInputWithGrouping(e.target.value))}
+                className="font-mono mt-1"
+              />
             </div>
           </div>
           <Button
@@ -1154,7 +1349,11 @@ export default function RedemptionPage() {
         <CardContent className="space-y-3">
           <div>
             <label className="text-xs text-muted-foreground">Safe Approval Tolerance (%)</label>
-            <Input value={variationToleranceInput} onChange={(e) => setVariationToleranceInput(e.target.value)} className="font-mono mt-1 max-w-xs" />
+            <Input
+              value={variationToleranceInput}
+              onChange={(e) => setVariationToleranceInput(formatNumberInputWithGrouping(e.target.value))}
+              className="font-mono mt-1 max-w-xs"
+            />
           </div>
           <Button
             variant="outline"
@@ -1167,13 +1366,10 @@ export default function RedemptionPage() {
         </CardContent>
       </Card>
 
-      {/* Payment Tokens */}
+      {/* Payment Token Management */}
       <Card className="bg-card border-border">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="font-display text-sm">Payment Tokens</CardTitle>
-          <Button size="sm" variant="ghost" className="text-xs text-primary" onClick={() => setShowAddToken(!showAddToken)}>
-            <Plus className="h-3 w-3 mr-1" />Add Payment Token
-          </Button>
+        <CardHeader className="pb-3">
+          <CardTitle className="font-display text-sm">Payment Token Management</CardTitle>
         </CardHeader>
         <CardContent>
           <table className="w-full text-xs">
@@ -1209,7 +1405,7 @@ export default function RedemptionPage() {
               ) : paymentTokenRows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-4 text-muted-foreground text-center">
-                    No payment tokens configured. Add one below.
+                    No payment tokens configured.
                   </td>
                 </tr>
               ) : (
@@ -1269,23 +1465,6 @@ export default function RedemptionPage() {
                         >
                           Edit Allowance
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-xs h-6 px-2 text-destructive"
-                          onClick={() =>
-                            queueVaultCall(
-                              "Remove Payment Token",
-                              `${symbol} (${shortAddr(token)})`,
-                              "removePaymentToken",
-                              [token],
-                              "Payment token removed",
-                              `removePaymentToken(${token})`,
-                            )
-                          }
-                        >
-                          Remove
-                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -1293,23 +1472,6 @@ export default function RedemptionPage() {
               )}
             </tbody>
           </table>
-          {showAddToken && (
-            <div className="mt-4 p-4 bg-secondary/30 rounded-lg space-y-3 border border-border">
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-muted-foreground">Token Address</label><Input value={addTokenAddress} onChange={(e) => setAddTokenAddress(e.target.value)} className="font-mono mt-1" placeholder="0x..." /></div>
-                <div><label className="text-xs text-muted-foreground">DataFeed</label><Input value={addTokenDataFeed} onChange={(e) => setAddTokenDataFeed(e.target.value)} className="font-mono mt-1" placeholder="0x..." /></div>
-                <div><label className="text-xs text-muted-foreground">Fee (%)</label><Input value={addTokenFeeInput} onChange={(e) => setAddTokenFeeInput(e.target.value)} className="font-mono mt-1" placeholder="0.10" /></div>
-                <div><label className="text-xs text-muted-foreground">Allowance</label><Input value={addTokenAllowanceInput} onChange={(e) => setAddTokenAllowanceInput(e.target.value)} className="font-mono mt-1" placeholder="500000" /></div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch checked={addTokenStable} onCheckedChange={(v) => setAddTokenStable(Boolean(v))} />
-                <span className="text-xs text-muted-foreground">Stable</span>
-              </div>
-              <Button size="sm" onClick={handleAddPaymentToken} disabled={!addPaymentTokenCanSubmit}>
-                Add
-              </Button>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -1320,39 +1482,24 @@ export default function RedemptionPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Token</label>
-              <Select
-                value={withdrawTokenAddress || undefined}
-                onValueChange={(v) => setWithdrawTokenAddress(v)}
-                disabled={
-                  !paymentVaultAddr ||
-                  paymentTokensTableLoading ||
-                  paymentTokenRows.length === 0
-                }
-              >
-                <SelectTrigger className="font-mono mt-1 w-full">
-                  <SelectValue placeholder="Select payment token" />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentTokenRows.map(({ token, symbol }) => (
-                    <SelectItem key={token} value={token} className="font-mono">
-                      {symbol} · {shortAddr(token)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-1 rounded-md border border-border bg-muted/20 px-3 py-2 font-mono text-sm text-foreground">
+                {paymentTokenRows[0]
+                  ? `${paymentTokenRows[0].symbol} · ${shortAddr(paymentTokenRows[0].token)}`
+                  : "—"}
+              </div>
               {!paymentVaultAddr ? (
                 <p className="text-xs text-muted-foreground mt-1">Load a vault to list payment tokens.</p>
               ) : paymentTokensListError ? (
                 <p className="text-xs text-destructive mt-1">Could not load payment tokens.</p>
               ) : !paymentTokensTableLoading && paymentTokenRows.length === 0 ? (
-                <p className="text-xs text-muted-foreground mt-1">No payment tokens — add one above first.</p>
+                <p className="text-xs text-muted-foreground mt-1">No payment tokens configured.</p>
               ) : null}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Amount</label>
               <Input
                 value={withdrawAmountInput}
-                onChange={(e) => setWithdrawAmountInput(e.target.value)}
+                onChange={(e) => setWithdrawAmountInput(formatNumberInputWithGrouping(e.target.value))}
                 className={cn(
                   "font-mono mt-1",
                   withdrawAmountExceedsVaultBalance && "border-destructive focus-visible:ring-destructive/40",
@@ -1377,7 +1524,9 @@ export default function RedemptionPage() {
                       onClick={() => {
                         if (withdrawVaultTokenBalance === undefined || withdrawTokenDecimals == null) return;
                         setWithdrawAmountInput(
-                          formatUnits(withdrawVaultTokenBalance, withdrawTokenDecimals),
+                          formatNumberInputWithGrouping(
+                            formatUnits(withdrawVaultTokenBalance, withdrawTokenDecimals),
+                          ),
                         );
                       }}
                     >
@@ -1413,7 +1562,13 @@ export default function RedemptionPage() {
       </Card>
 
       {/* New Rate Modal */}
-      <Dialog open={rateModalOpen} onOpenChange={setRateModalOpen}>
+      <Dialog
+        open={rateModalOpen}
+        onOpenChange={(open) => {
+          setRateModalOpen(open);
+          if (!open) setRateModalBulkMode(null);
+        }}
+      >
         <DialogContent className="bg-card border-border">
           <DialogHeader>
             <DialogTitle className="font-display">{rateModalLabel}</DialogTitle>
@@ -1423,10 +1578,18 @@ export default function RedemptionPage() {
               <label className="text-xs text-muted-foreground">Redemption Rate (USD per share)</label>
               <Input value={newRate} onChange={(e) => setNewRate(e.target.value)} className="font-mono mt-1" />
             </div>
-            <div className="text-xs text-muted-foreground font-mono">Current Oracle NAV: ${CURRENT_NAV}</div>
+            <div className="text-xs text-muted-foreground font-mono">Current Oracle NAV: ${currentOracleNav}</div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setRateModalOpen(false)}>Cancel</Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setRateModalOpen(false);
+                setRateModalBulkMode(null);
+              }}
+            >
+              Cancel
+            </Button>
             <Button onClick={submitRateModal} disabled={!rateModalCanSubmit}>
               Submit
             </Button>
@@ -1501,13 +1664,13 @@ export default function RedemptionPage() {
             </label>
             <Input
               value={paymentTokenEditInput}
-              onChange={(e) => setPaymentTokenEditInput(e.target.value)}
+              onChange={(e) => setPaymentTokenEditInput(formatNumberInputWithGrouping(e.target.value))}
               className="font-mono"
               placeholder={paymentTokenEditKind === "fee" ? "0.10" : "500000"}
             />
             {paymentTokenEditKind === "allowance" ? (
               <p className="text-xs text-muted-foreground">
-                Must be &gt; 0. Parsed with the same 18-decimal rules as &quot;Add Payment Token&quot;.
+                Must be &gt; 0. Uses token 18-decimal units.
               </p>
             ) : null}
           </div>
@@ -1531,8 +1694,10 @@ export default function RedemptionPage() {
             setPendingInstantSteps([]);
             setPendingProgressMessage(undefined);
             setInstantBatchProgress(null);
+            setConfirmSuccessTxRows([]);
             setConfirmContractNote("");
             setConfirmActionContractNote("");
+            setConfirmValueLabel(undefined);
             setConfirmValueRows(null);
           }
         }}
@@ -1541,11 +1706,12 @@ export default function RedemptionPage() {
         newValue={confirmValue}
         newValueSecondary={confirmContractNote || undefined}
         newValueLabel={
-          pendingInstantSteps.length
+          confirmValueLabel ??
+          (pendingInstantSteps.length
             ? "Batch"
             : confirmContractNote || confirmActionContractNote
               ? "Summary"
-              : "New Value"
+              : "New Value")
         }
         valueRows={confirmValueRows ?? undefined}
         summaryRows={
@@ -1572,6 +1738,7 @@ export default function RedemptionPage() {
           "Submit in your wallet and wait for the transaction to be mined."
         }
         batchProgress={instantBatchProgress}
+        successTxRows={confirmSuccessTxRows}
       />
     </div>
   );

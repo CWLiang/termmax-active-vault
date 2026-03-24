@@ -103,6 +103,33 @@ export interface ActivityResponseDto {
   totalItems: number;
 }
 
+export type RequestStatus = "PENDING" | "PROCESSED" | "CANCELED";
+
+export interface RedeemRequestItemDto {
+  chainId: number;
+  vaultAddress: string;
+  requestId: string;
+  status: RequestStatus;
+  sender: string;
+  recipient: string;
+  tokenOut: string;
+  amountMTokenIn: string;
+  feeAmount: string;
+  createdAt: string;
+  updatedAt: string | null;
+  createdTxHash: string;
+  updatedTxHash: string | null;
+  processedMTokenRate: string | null;
+  terminalEventType: "APPROVE" | "SAFE_APPROVE" | "REJECT" | null;
+}
+
+export interface RedeemRequestListResponseDto {
+  items: RedeemRequestItemDto[];
+  page: number;
+  totalPages: number;
+  totalItems: number;
+}
+
 export interface UserPositionDto {
   vaultId: string;
   vaultName: string;

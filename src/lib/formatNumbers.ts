@@ -93,3 +93,41 @@ export function formatUsdCompact(value: number, style: UsdCompactStyle = "detail
   }
   return `${sign}$${formatDisplayNumber(abs, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
+/** Removes visual group separators from user-entered numeric text. */
+export function stripNumberGrouping(input: string): string {
+  return input.replace(/,/g, "").trim();
+}
+
+/**
+ * Formats user-entered numeric text with en-US thousands separators while typing.
+ * Keeps a single decimal point and preserves incomplete decimals like "1,234.".
+ */
+export function formatNumberInputWithGrouping(input: string): string {
+  const raw = stripNumberGrouping(input).replace(/\s+/g, "");
+  if (raw === "") return "";
+
+  const negative = raw.startsWith("-");
+  let body = negative ? raw.slice(1) : raw;
+  body = body.replace(/[^0-9.]/g, "");
+  if (body === "") return negative ? "-" : "";
+
+  const dotIdx = body.indexOf(".");
+  let intPart = "";
+  let fracPart = "";
+  let hasDot = false;
+
+  if (dotIdx >= 0) {
+    hasDot = true;
+    intPart = body.slice(0, dotIdx).replace(/\./g, "");
+    fracPart = body.slice(dotIdx + 1).replace(/\./g, "");
+  } else {
+    intPart = body.replace(/\./g, "");
+  }
+
+  intPart = intPart.replace(/^0+(?=\d)/, "");
+  if (intPart === "") intPart = "0";
+
+  const groupedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${negative ? "-" : ""}${groupedInt}${hasDot ? `.${fracPart}` : ""}`;
+}

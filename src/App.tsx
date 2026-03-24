@@ -19,7 +19,6 @@ import VaultOverviewPage from "./pages/curator-console/VaultOverviewPage";
 import NAVManagementPage from "./pages/curator-console/NAVManagementPage";
 import RedemptionPage from "./pages/curator-console/RedemptionPage";
 import DepositVaultPage from "./pages/curator-console/DepositVaultPage";
-import AuditLogPage from "./pages/curator-console/AuditLogPage";
 
 const queryClient = new QueryClient();
 
@@ -78,14 +77,7 @@ const App = () => (
                     </CuratorVaultGuard>
                   }
                 />
-                <Route
-                  path="audit-log"
-                  element={
-                    <CuratorVaultGuard>
-                      <AuditLogPage />
-                    </CuratorVaultGuard>
-                  }
-                />
+                <Route path="audit-log" element={<Navigate to="overview" replace />} />
               </Route>
               <Route path="vault-overview" element={<Navigate to="/curator-console" replace />} />
               <Route path="nav" element={<Navigate to="/curator-console" replace />} />

@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { Loader2, CheckCircle2, XCircle, Copy, ExternalLink } from "lucide-react";
 import { isAddress } from "viem";
 import { toast } from "sonner";
-import { getExplorerAddressUrl } from "@/lib/explorer";
+import { getExplorerAddressUrl, getExplorerTxUrl } from "@/lib/explorer";
 import { showConfirmModalContractDetails } from "@/lib/confirm-modal-env";
 import { useAccount, useChainId, useConnect, useSwitchChain } from "wagmi";
 
@@ -21,6 +21,11 @@ export type ConfirmSummaryRow = {
 export type ConfirmModalValueRow = {
   label: string;
   value: string;
+};
+
+export type ConfirmSuccessTxRow = {
+  label: string;
+  hash: string;
 };
 
 interface ConfirmActionModalProps {
@@ -57,6 +62,8 @@ interface ConfirmActionModalProps {
   pendingMessage?: string;
   /** When set with `total > 1`, shows a progress bar for multi-step wallet flows. */
   batchProgress?: { current: number; total: number } | null;
+  /** Successful tx hashes to show after submission completes. */
+  successTxRows?: ConfirmSuccessTxRow[];
 }
 
 function shortAddr(a: string) {
@@ -132,6 +139,7 @@ export function ConfirmActionModal({
   valueRows,
   pendingMessage = "Submit in your wallet and wait for the transaction to be mined.",
   batchProgress = null,
+  successTxRows = [],
 }: ConfirmActionModalProps) {
   const { isConnected } = useAccount();
   const walletChainId = useChainId();
@@ -153,6 +161,11 @@ export function ConfirmActionModal({
     Number.isFinite(explorerChainId) &&
     walletChainId !== explorerChainId;
   const showContractDetails = showConfirmModalContractDetails();
+  const validSuccessTxRows = successTxRows.filter(
+    (row) =>
+      row.label.trim().length > 0 &&
+      /^0x([A-Fa-f0-9]{64})$/.test(row.hash.trim()),
+  );
 
   const handleConnectWallet = async () => {
     const connector = connectors[0];
@@ -175,7 +188,7 @@ export function ConfirmActionModal({
       setErrorText(null);
       setHadConfirmHandler(Boolean(onConfirm));
     }
-  }, [open, onConfirm]);
+  }, [open]);
 
   useEffect(() => {
     if (open && onConfirm) setHadConfirmHandler(true);
@@ -345,23 +358,34 @@ export function ConfirmActionModal({
 
         {status === "pending" && (
           <div className="space-y-2 text-accent text-sm p-3 bg-accent/10 rounded-lg">
-            {batchProgress != null &&
-            batchProgress.total > 1 &&
-            batchProgress.current >= 1 &&
-            batchProgress.current <= batchProgress.total ? (
-              <div className="space-y-1.5">
-                <div className="flex justify-between gap-2 text-[11px] font-medium text-accent/95 uppercase tracking-wide">
-                  <span>Signing progress</span>
+            <div className="space-y-1.5">
+              <div className="flex justify-between gap-2 text-[11px] font-medium text-accent/95 uppercase tracking-wide">
+                <span>
+                  {batchProgress != null && batchProgress.total > 1
+                    ? "Signing progress"
+                    : "Transaction progress"}
+                </span>
+                {batchProgress != null && batchProgress.total > 1 ? (
                   <span className="font-mono tabular-nums normal-case">
-                    {batchProgress.current} / {batchProgress.total}
+                    {Math.min(Math.max(batchProgress.current, 1), batchProgress.total)} / {batchProgress.total}
                   </span>
-                </div>
-                <Progress
-                  className="h-2 bg-accent/20"
-                  value={Math.min(100, Math.round((100 * batchProgress.current) / batchProgress.total))}
-                />
+                ) : null}
               </div>
-            ) : null}
+              <Progress
+                className="h-2 bg-accent/20"
+                value={
+                  batchProgress != null && batchProgress.total > 1
+                    ? Math.min(
+                        100,
+                        Math.round(
+                          (100 * Math.min(Math.max(batchProgress.current, 1), batchProgress.total)) /
+                            batchProgress.total,
+                        ),
+                      )
+                    : 45
+                }
+              />
+            </div>
             <div className="flex items-start gap-2">
               <Loader2 className="h-4 w-4 shrink-0 animate-spin mt-0.5" />
               <span className="leading-snug min-w-0">{pendingMessage}</span>
@@ -369,9 +393,50 @@ export function ConfirmActionModal({
           </div>
         )}
         {status === "success" && (
-          <div className="flex items-center gap-2 text-yield-positive text-sm p-3 bg-yield-positive/10 rounded-lg">
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Success. UI updated.
+          <div className="space-y-2 text-yield-positive text-sm p-3 bg-yield-positive/10 rounded-lg">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>Success</span>
+            </div>
+            {validSuccessTxRows.length > 0 ? (
+              <div className="space-y-1.5">
+                {validSuccessTxRows.map((row, i) => {
+                  const txHash = row.hash.trim();
+                  const explorerUrl =
+                    explorerChainId != null ? getExplorerTxUrl(explorerChainId, txHash) : null;
+                  return (
+                    <div key={`${txHash}-${i}`} className="flex justify-between gap-2 items-start">
+                      <span className="text-muted-foreground shrink-0 pt-0.5">{row.label}</span>
+                      <div className="flex items-start gap-1.5 min-w-0 justify-end max-w-[min(100%,18rem)]">
+                        <span className="font-mono text-xs text-right break-all">{shortAddr(txHash)}</span>
+                        <button
+                          type="button"
+                          className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors shrink-0"
+                          aria-label={`Copy ${row.label}`}
+                          onClick={() => {
+                            void navigator.clipboard.writeText(txHash);
+                            toast.success("Copied tx hash");
+                          }}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                        {explorerUrl ? (
+                          <a
+                            href={explorerUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors inline-flex shrink-0"
+                            aria-label="View transaction on block explorer"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         )}
         {status === "error" && (

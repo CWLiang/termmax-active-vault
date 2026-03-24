@@ -4,14 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -21,6 +13,7 @@ import {
 import {
   ConfirmActionModal,
   type ConfirmModalValueRow,
+  type ConfirmSuccessTxRow,
 } from "@/components/curator-console/ConfirmActionModal";
 import { ManageableVaultAddressWithActions } from "@/components/curator-console/ManageableVaultAddressWithActions";
 import {
@@ -41,8 +34,11 @@ import { formatUnits, isAddress, parseUnits } from "viem";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastChainTxSuccess } from "@/lib/toastChainTx";
-import { formatDisplayNumber } from "@/lib/formatNumbers";
-import { showConfirmModalContractDetails } from "@/lib/confirm-modal-env";
+import {
+  formatDisplayNumber,
+  formatNumberInputWithGrouping,
+  stripNumberGrouping,
+} from "@/lib/formatNumbers";
 import {
   PAYMENT_ALLOWANCE_DECIMALS,
   shortAddr,
@@ -54,7 +50,7 @@ import {
   parseTokenConfigResult,
   parseInstantSettingsInputs,
 } from "@/lib/curatorManageableVaultFormat";
-import { AlertTriangle, Plus } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 type PendingManageableCall = {
   functionName:
@@ -63,8 +59,6 @@ type PendingManageableCall = {
     | "setInstantFee"
     | "setInstantDailyLimit"
     | "setVariationTolerance"
-    | "addPaymentToken"
-    | "removePaymentToken"
     | "changeTokenFee"
     | "changeTokenAllowance"
     | "withdrawToken";
@@ -82,7 +76,6 @@ export default function DepositVaultPage() {
     valid ? chainId : undefined,
     valid ? mTokenAddress : undefined,
   );
-  const showContractDevHints = showConfirmModalContractDetails();
   const vaultAddress = vaultDetail?.depositVaultAddress;
   const mToken = isAddress(mTokenAddress) ? mTokenAddress : undefined;
 
@@ -268,19 +261,28 @@ export default function DepositVaultPage() {
   useEffect(() => {
     if (instantDailyLimit != null) {
       setInstantDailyLimitInput(
-        formatUnits(instantDailyLimit, mTokenDecimals != null ? Number(mTokenDecimals) : 18),
+        formatNumberInputWithGrouping(
+          formatUnits(instantDailyLimit, mTokenDecimals != null ? Number(mTokenDecimals) : 18),
+        ),
       );
     }
   }, [instantDailyLimit, mTokenDecimals]);
   useEffect(() => {
     if (onChainVariationTolerance != null) {
-      setVariationToleranceInput((Number(onChainVariationTolerance) / 100).toFixed(2));
+      setVariationToleranceInput(
+        formatDisplayNumber(Number(onChainVariationTolerance) / 100, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        }),
+      );
     }
   }, [onChainVariationTolerance]);
   useEffect(() => {
     if (maxSupplyCapOnChain != null) {
       setSupplyCapInput(
-        formatUnits(maxSupplyCapOnChain, mTokenDecimals != null ? Number(mTokenDecimals) : 18),
+        formatNumberInputWithGrouping(
+          formatUnits(maxSupplyCapOnChain, mTokenDecimals != null ? Number(mTokenDecimals) : 18),
+        ),
       );
     }
   }, [maxSupplyCapOnChain, mTokenDecimals]);
@@ -296,6 +298,7 @@ export default function DepositVaultPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState("");
   const [confirmValue, setConfirmValue] = useState("");
+  const [confirmValueLabel, setConfirmValueLabel] = useState<string | undefined>(undefined);
   const [confirmValueRows, setConfirmValueRows] = useState<ConfirmModalValueRow[] | null>(null);
   const [confirmContractNote, setConfirmContractNote] = useState("");
   const [confirmActionContractNote, setConfirmActionContractNote] = useState("");
@@ -321,6 +324,7 @@ export default function DepositVaultPage() {
     current: number;
     total: number;
   } | null>(null);
+  const [confirmSuccessTxRows, setConfirmSuccessTxRows] = useState<ConfirmSuccessTxRow[]>([]);
   const [walletEditOpen, setWalletEditOpen] = useState(false);
   const [walletEditKind, setWalletEditKind] = useState<"management" | "fee" | null>(null);
   const [walletEditValue, setWalletEditValue] = useState("");
@@ -340,13 +344,7 @@ export default function DepositVaultPage() {
     bigint | null
   >(null);
 
-  const [showAddToken, setShowAddToken] = useState(false);
-  const [addTokenAddress, setAddTokenAddress] = useState("");
-  const [addTokenDataFeed, setAddTokenDataFeed] = useState("");
-  const [addTokenFeeInput, setAddTokenFeeInput] = useState("0.10");
-  const [addTokenAllowanceInput, setAddTokenAllowanceInput] = useState("500000");
-  const [addTokenStable, setAddTokenStable] = useState(false);
-  const [withdrawTokenAddress, setWithdrawTokenAddress] = useState("");
+  const withdrawTokenAddress = paymentTokenRows[0]?.token ?? "";
   const [withdrawAmountInput, setWithdrawAmountInput] = useState("");
   const [withdrawToAddress, setWithdrawToAddress] = useState("");
 
@@ -355,22 +353,6 @@ export default function DepositVaultPage() {
     const t = withdrawTokenAddress.trim().toLowerCase();
     return paymentTokenRows.find((r) => r.token.toLowerCase() === t)?.decimals;
   }, [withdrawTokenAddress, paymentTokenRows]);
-
-  useEffect(() => {
-    const first = paymentTokenRows[0]?.token;
-    if (!first) {
-      setWithdrawTokenAddress("");
-      return;
-    }
-    if (!withdrawTokenAddress.trim()) {
-      setWithdrawTokenAddress(first);
-      return;
-    }
-    const inList = paymentTokenRows.some(
-      (r) => r.token.toLowerCase() === withdrawTokenAddress.toLowerCase(),
-    );
-    if (!inList) setWithdrawTokenAddress(first);
-  }, [paymentTokenRows, withdrawTokenAddress]);
 
   const withdrawErc20Addr =
     withdrawTokenAddress.trim() && isAddress(withdrawTokenAddress.trim())
@@ -401,7 +383,7 @@ export default function DepositVaultPage() {
   const withdrawParsedAmountRaw = useMemo(() => {
     if (withdrawTokenDecimals == null) return null;
     try {
-      return parseUnits(withdrawAmountInput.trim() || "0", withdrawTokenDecimals);
+      return parseUnits(stripNumberGrouping(withdrawAmountInput) || "0", withdrawTokenDecimals);
     } catch {
       return null;
     }
@@ -433,7 +415,7 @@ export default function DepositVaultPage() {
     if (!vaultAddress) return false;
     if (variationToleranceLoading || variationToleranceReadError) return false;
     if (onChainVariationTolerance === undefined) return false;
-    const pct = Number(variationToleranceInput);
+    const pct = Number(stripNumberGrouping(variationToleranceInput));
     if (!Number.isFinite(pct) || pct < 0) return false;
     const toleranceRaw = BigInt(Math.round(pct * 100));
     return toleranceRaw !== onChainVariationTolerance;
@@ -452,7 +434,7 @@ export default function DepositVaultPage() {
     const dec = mTokenDecimals != null ? Number(mTokenDecimals) : 18;
     let parsed: bigint;
     try {
-      parsed = parseUnits(supplyCapInput.trim() || "0", dec);
+      parsed = parseUnits(stripNumberGrouping(supplyCapInput) || "0", dec);
     } catch {
       return false;
     }
@@ -466,27 +448,15 @@ export default function DepositVaultPage() {
     mTokenDecimals,
   ]);
 
-  const addPaymentTokenCanSubmit = useMemo(() => {
-    if (!isAddress(addTokenAddress.trim()) || !isAddress(addTokenDataFeed.trim())) return false;
-    const feePct = Number(addTokenFeeInput);
-    if (!Number.isFinite(feePct) || feePct < 0) return false;
-    try {
-      parseUnits(addTokenAllowanceInput || "0", PAYMENT_ALLOWANCE_DECIMALS);
-    } catch {
-      return false;
-    }
-    return true;
-  }, [addTokenAddress, addTokenDataFeed, addTokenFeeInput, addTokenAllowanceInput]);
-
   const withdrawTokenCanSubmit = useMemo(() => {
-    if (!isAddress(withdrawTokenAddress.trim()) || !isAddress(withdrawToAddress.trim())) return false;
+    if (!withdrawErc20Addr || !isAddress(withdrawToAddress.trim())) return false;
     if (withdrawTokenDecimals == null) return false;
     if (withdrawParsedAmountRaw == null || withdrawParsedAmountRaw <= 0n) return false;
     if (!withdrawVaultBalanceReady) return false;
     if (withdrawVaultTokenBalance === undefined) return false;
     return withdrawParsedAmountRaw <= withdrawVaultTokenBalance;
   }, [
-    withdrawTokenAddress,
+    withdrawErc20Addr,
     withdrawToAddress,
     withdrawTokenDecimals,
     withdrawParsedAmountRaw,
@@ -503,7 +473,7 @@ export default function DepositVaultPage() {
   const paymentTokenEditFeeCanContinue = useMemo(() => {
     if (paymentTokenEditKind !== "fee") return false;
     if (!isAddress(paymentTokenEditToken) || paymentTokenEditOnChainFee == null) return false;
-    const pct = Number(paymentTokenEditInput);
+    const pct = Number(stripNumberGrouping(paymentTokenEditInput));
     if (!Number.isFinite(pct) || pct < 0 || pct > 100) return false;
     const feeRaw = BigInt(Math.round(pct * 100));
     if (feeRaw > 10000n) return false;
@@ -520,7 +490,7 @@ export default function DepositVaultPage() {
     if (!isAddress(paymentTokenEditToken) || paymentTokenEditOnChainAllowance == null) return false;
     let raw: bigint;
     try {
-      raw = parseUnits(paymentTokenEditInput.trim() || "0", PAYMENT_ALLOWANCE_DECIMALS);
+      raw = parseUnits(stripNumberGrouping(paymentTokenEditInput) || "0", PAYMENT_ALLOWANCE_DECIMALS);
     } catch {
       return false;
     }
@@ -546,9 +516,12 @@ export default function DepositVaultPage() {
     contractNote?: string,
     pinContractNoteUnderAction?: boolean,
     valueRows?: ConfirmModalValueRow[] | null,
+    valueLabel?: string,
   ) => {
+    setConfirmSuccessTxRows([]);
     setConfirmAction(action);
     setConfirmValue(value || "");
+    setConfirmValueLabel(valueLabel);
     setConfirmValueRows(valueRows != null && valueRows.length > 0 ? valueRows : null);
     if (pinContractNoteUnderAction && contractNote) {
       setConfirmActionContractNote(contractNote);
@@ -579,12 +552,14 @@ export default function DepositVaultPage() {
     const functionName = walletEditKind === "management" ? "setTokensReceiver" : "setFeeReceiver";
     const label =
       walletEditKind === "management" ? "Change Management Wallet" : "Change Fee Wallet";
+    const newValueLabel =
+      walletEditKind === "management" ? "New Management Wallet" : "New Fee Wallet";
     setPendingVaultCall({
       functionName,
       args: [t as `0x${string}`],
       successTitle: `${label} updated`,
     });
-    openConfirm(label, t, `${functionName}(${t})`, true);
+    openConfirm(label, t, `${functionName}(${t})`, true, null, newValueLabel);
   };
 
   const openEditPaymentTokenFee = (
@@ -609,7 +584,9 @@ export default function DepositVaultPage() {
     setPaymentTokenEditKind("allowance");
     setPaymentTokenEditToken(token);
     setPaymentTokenEditSymbol(symbol);
-    setPaymentTokenEditInput(formatUnits(allowanceRaw, PAYMENT_ALLOWANCE_DECIMALS));
+    setPaymentTokenEditInput(
+      formatNumberInputWithGrouping(formatUnits(allowanceRaw, PAYMENT_ALLOWANCE_DECIMALS)),
+    );
     setPaymentTokenEditOnChainFee(null);
     setPaymentTokenEditOnChainAllowance(allowanceRaw);
     setPaymentTokenEditOpen(true);
@@ -618,7 +595,7 @@ export default function DepositVaultPage() {
   const submitPaymentTokenEdit = () => {
     if (!paymentTokenEditKind || !isAddress(paymentTokenEditToken)) return;
     if (paymentTokenEditKind === "fee") {
-      const pct = Number(paymentTokenEditInput);
+      const pct = Number(stripNumberGrouping(paymentTokenEditInput));
       if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
         toast.error("Fee must be between 0% and 100%.");
         return;
@@ -632,17 +609,20 @@ export default function DepositVaultPage() {
       setPaymentTokenEditKind(null);
       queueVaultCall(
         "Change Payment Token Fee",
-        `${paymentTokenEditSymbol}: ${formatDisplayNumber(pct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
+        `${formatDisplayNumber(pct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
         "changeTokenFee",
         [paymentTokenEditToken, feeRaw],
         "Payment token fee updated",
         `changeTokenFee(${paymentTokenEditToken}, ${feeRaw.toString()})`,
+        true,
+        null,
+        "New Payment Token Fee",
       );
       return;
     }
     let allowanceRaw: bigint;
     try {
-      allowanceRaw = parseUnits(paymentTokenEditInput.trim() || "0", PAYMENT_ALLOWANCE_DECIMALS);
+      allowanceRaw = parseUnits(stripNumberGrouping(paymentTokenEditInput) || "0", PAYMENT_ALLOWANCE_DECIMALS);
     } catch {
       toast.error("Allowance is invalid.");
       return;
@@ -653,15 +633,25 @@ export default function DepositVaultPage() {
     }
     setPaymentTokenEditOpen(false);
     setPaymentTokenEditKind(null);
+    const allowanceDisplay = (() => {
+      const raw = formatUnits(allowanceRaw, PAYMENT_ALLOWANCE_DECIMALS);
+      const sign = raw.startsWith("-") ? "-" : "";
+      const unsigned = sign ? raw.slice(1) : raw;
+      const [intPart, fracPart = ""] = unsigned.split(".");
+      const groupedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      const trimmedFrac = fracPart.replace(/0+$/, "");
+      return `${sign}${groupedInt}${trimmedFrac ? `.${trimmedFrac}` : ""}`;
+    })();
     queueVaultCall(
       "Change Payment Token Allowance",
-      `${paymentTokenEditSymbol}: ${formatUnits(allowanceRaw, PAYMENT_ALLOWANCE_DECIMALS)}${
-        showContractDevHints ? " (stored with 18 decimal places)" : ""
-      }`,
+      allowanceDisplay,
       "changeTokenAllowance",
       [paymentTokenEditToken, allowanceRaw],
       "Payment token allowance updated",
       `changeTokenAllowance(${paymentTokenEditToken}, ${allowanceRaw.toString()})`,
+      true,
+      null,
+      "New Allowance",
     );
   };
 
@@ -674,6 +664,7 @@ export default function DepositVaultPage() {
     contractNote?: string,
     pinContractNoteUnderAction = true,
     valueRows?: ConfirmModalValueRow[] | null,
+    valueLabel?: string,
   ) => {
     setPendingVaultCall({ functionName, args, successTitle });
     const hasRows = valueRows != null && valueRows.length > 0;
@@ -683,6 +674,7 @@ export default function DepositVaultPage() {
       contractNote,
       pinContractNoteUnderAction,
       hasRows ? valueRows : null,
+      valueLabel,
     );
   };
 
@@ -715,9 +707,7 @@ export default function DepositVaultPage() {
         functionName: "setInstantFee",
         args: [feeRaw],
         successTitle: "Instant fee updated",
-        human: `Instant fee: ${formatDisplayNumber(feePercent, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%${
-          showContractDevHints ? " (stored on-chain as percent × 100)" : ""
-        }`,
+        human: `Instant fee: ${formatDisplayNumber(feePercent, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
         contractNote: `setInstantFee(${feeRaw.toString()})`,
       });
     }
@@ -726,9 +716,7 @@ export default function DepositVaultPage() {
         functionName: "setInstantDailyLimit",
         args: [dailyLimit],
         successTitle: "Instant daily limit updated",
-        human: `Instant daily limit: ${instantDailyLimitInput} ${mTokenSymbol ?? "mToken"}${
-          showContractDevHints ? ` (token ${mTokenDecimals ?? 18} decimals)` : ""
-        }`,
+        human: `Instant daily limit: ${instantDailyLimitInput} ${mTokenSymbol ?? "mToken"}`,
         contractNote: `setInstantDailyLimit(${dailyLimit.toString()})`,
       });
     }
@@ -744,20 +732,22 @@ export default function DepositVaultPage() {
   };
 
   const handleSaveVariationTolerance = () => {
-    const pct = Number(variationToleranceInput);
+    const pct = Number(stripNumberGrouping(variationToleranceInput));
     if (!Number.isFinite(pct) || pct < 0) {
       toast.error("Variation tolerance must be a valid non-negative percent.");
       return;
     }
     const toleranceRaw = BigInt(Math.round(pct * 100));
     queueVaultCall(
-      "Save Variation Tolerance",
-      `Safe-approve tolerance: ${formatDisplayNumber(pct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
+      "Set Variation Tolerance",
+      `${formatDisplayNumber(pct, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`,
       "setVariationTolerance",
       [toleranceRaw],
       "Variation tolerance updated",
       `setVariationTolerance(${toleranceRaw.toString()})`,
       false,
+      null,
+      "New Variation Tolerance",
     );
   };
 
@@ -773,7 +763,7 @@ export default function DepositVaultPage() {
     const dec = mTokenDecimals != null ? Number(mTokenDecimals) : 18;
     let cap: bigint;
     try {
-      cap = parseUnits(supplyCapInput.trim() || "0", dec);
+      cap = parseUnits(stripNumberGrouping(supplyCapInput) || "0", dec);
     } catch {
       toast.error("Supply cap is invalid for this token’s decimals.");
       return;
@@ -789,50 +779,26 @@ export default function DepositVaultPage() {
       contractNote: note,
     });
     openConfirm(
-      "Save Supply Cap",
-      `${supplyCapInput.trim()} ${mTokenSymbol ?? "mToken"}`,
+      "Set Supply Cap",
+      `${(() => {
+        const capDec = formatUnits(cap, dec);
+        const sign = capDec.startsWith("-") ? "-" : "";
+        const unsigned = sign ? capDec.slice(1) : capDec;
+        const [intPart, fracPart = ""] = unsigned.split(".");
+        const groupedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        const trimmedFrac = fracPart.replace(/0+$/, "");
+        return `${sign}${groupedInt}${trimmedFrac ? `.${trimmedFrac}` : ""}`;
+      })()} ${mTokenSymbol ?? "mToken"}`,
       note,
       false,
-    );
-  };
-
-  const handleAddPaymentToken = () => {
-    if (!isAddress(addTokenAddress) || !isAddress(addTokenDataFeed)) {
-      toast.error("Token and DataFeed must be valid addresses.");
-      return;
-    }
-    const feePct = Number(addTokenFeeInput);
-    if (!Number.isFinite(feePct) || feePct < 0) {
-      toast.error("Fee must be a valid non-negative percent.");
-      return;
-    }
-    let allowanceRaw: bigint;
-    try {
-      allowanceRaw = parseUnits(addTokenAllowanceInput || "0", PAYMENT_ALLOWANCE_DECIMALS);
-    } catch {
-      toast.error("Allowance is invalid.");
-      return;
-    }
-    const feeRaw = BigInt(Math.round(feePct * 100));
-    queueVaultCall(
-      "Add Payment Token",
-      `Add token ${shortAddr(addTokenAddress)}, oracle ${shortAddr(addTokenDataFeed)}, fee ${formatDisplayNumber(feePct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%, allowance ${addTokenAllowanceInput}, stable: ${addTokenStable ? "yes" : "no"}`,
-      "addPaymentToken",
-      [
-        addTokenAddress as `0x${string}`,
-        addTokenDataFeed as `0x${string}`,
-        feeRaw,
-        allowanceRaw,
-        addTokenStable,
-      ],
-      "Payment token added",
-      `addPaymentToken(${addTokenAddress}, ${addTokenDataFeed}, ${feeRaw.toString()}, ${allowanceRaw.toString()}, ${addTokenStable})`,
+      null,
+      "New Supply Cap",
     );
   };
 
   const handleWithdrawToken = () => {
-    if (!isAddress(withdrawTokenAddress) || !isAddress(withdrawToAddress)) {
-      toast.error("Select a payment token and enter a valid Recipient address.");
+    if (!withdrawErc20Addr || !isAddress(withdrawToAddress)) {
+      toast.error("Payment token unavailable or recipient address is invalid.");
       return;
     }
     if (withdrawTokenDecimals == null) {
@@ -841,7 +807,7 @@ export default function DepositVaultPage() {
     }
     let amountRaw: bigint;
     try {
-      amountRaw = parseUnits(withdrawAmountInput || "0", withdrawTokenDecimals);
+      amountRaw = parseUnits(stripNumberGrouping(withdrawAmountInput) || "0", withdrawTokenDecimals);
     } catch {
       toast.error("Withdraw amount is invalid for this token’s decimals.");
       return;
@@ -855,16 +821,16 @@ export default function DepositVaultPage() {
       return;
     }
     const sym =
-      paymentTokenRows.find((r) => r.token.toLowerCase() === withdrawTokenAddress.toLowerCase())
-        ?.symbol ?? shortAddr(withdrawTokenAddress);
+      paymentTokenRows.find((r) => r.token.toLowerCase() === withdrawErc20Addr.toLowerCase())
+        ?.symbol ?? shortAddr(withdrawErc20Addr);
     const amountHuman = formatAmount(amountRaw, withdrawTokenDecimals, 6);
     queueVaultCall(
       "Withdraw Token",
       "",
       "withdrawToken",
-      [withdrawTokenAddress as `0x${string}`, amountRaw, withdrawToAddress as `0x${string}`],
+      [withdrawErc20Addr, amountRaw, withdrawToAddress as `0x${string}`],
       "Token withdrawn",
-      `withdrawToken(${withdrawTokenAddress}, ${amountRaw.toString()}, ${withdrawToAddress})`,
+      `withdrawToken(${withdrawErc20Addr}, ${amountRaw.toString()}, ${withdrawToAddress})`,
       true,
       [
         { label: "Amount", value: `${amountHuman} ${sym}` },
@@ -894,11 +860,7 @@ export default function DepositVaultPage() {
     if (publicClient) {
       await publicClient.waitForTransactionReceipt({ hash });
     }
-    const refetchPaymentList =
-      pendingVaultCall.functionName === "addPaymentToken" ||
-      pendingVaultCall.functionName === "removePaymentToken"
-        ? refetchPaymentTokens()
-        : Promise.resolve();
+    const refetchPaymentList = Promise.resolve();
     const refetchPaymentConfigs =
       pendingVaultCall.functionName === "changeTokenFee" ||
       pendingVaultCall.functionName === "changeTokenAllowance"
@@ -919,6 +881,17 @@ export default function DepositVaultPage() {
     } else {
       toast.success(pendingVaultCall.successTitle);
     }
+    const successLabel: Record<PendingManageableCall["functionName"], string> = {
+      setTokensReceiver: "Set Management Wallet Tx",
+      setFeeReceiver: "Set Fee Wallet Tx",
+      setInstantFee: "Set Instant Fee Tx",
+      setInstantDailyLimit: "Set Instant Daily Limit Tx",
+      setVariationTolerance: "Set Variation Tolerance Tx",
+      changeTokenFee: "Change Payment Token Fee Tx",
+      changeTokenAllowance: "Change Payment Token Allowance Tx",
+      withdrawToken: "Withdraw Token Tx",
+    };
+    setConfirmSuccessTxRows([{ label: successLabel[pendingVaultCall.functionName], hash }]);
     if (pendingVaultCall.functionName === "withdrawToken") {
       setWithdrawAmountInput("");
       setWithdrawToAddress("");
@@ -954,6 +927,7 @@ export default function DepositVaultPage() {
     } else {
       toast.success(pendingDepositCapCall.successTitle);
     }
+    setConfirmSuccessTxRows([{ label: "Set Max Supply Cap Tx", hash }]);
     setPendingDepositCapCall(null);
     setPendingProgressMessage(undefined);
   };
@@ -970,6 +944,7 @@ export default function DepositVaultPage() {
       throw new Error(`Switch wallet to chain ${chainId}.`);
     }
     const total = pendingInstantSteps.length;
+    const successRows: ConfirmSuccessTxRow[] = [];
     try {
       for (let i = 0; i < total; i += 1) {
         const step = pendingInstantSteps[i];
@@ -996,6 +971,12 @@ export default function DepositVaultPage() {
         } else {
           toast.success(step.successTitle);
         }
+        const successLabel =
+          step.functionName === "setInstantFee"
+            ? "Set Instant Fee Tx"
+            : "Set Instant Daily Limit Tx";
+        successRows.push({ label: successLabel, hash });
+        setConfirmSuccessTxRows([...successRows]);
       }
       await Promise.all([refetchInstantFee(), refetchInstantDailyLimit()]);
     } finally {
@@ -1114,7 +1095,7 @@ export default function DepositVaultPage() {
               <label className="text-xs text-muted-foreground">Instant Fee (%)</label>
               <Input
                 value={instantFeeInput}
-                onChange={(e) => setInstantFeeInput(e.target.value)}
+                onChange={(e) => setInstantFeeInput(formatNumberInputWithGrouping(e.target.value))}
                 className="font-mono mt-1"
               />
             </div>
@@ -1124,7 +1105,7 @@ export default function DepositVaultPage() {
               </label>
               <Input
                 value={instantDailyLimitInput}
-                onChange={(e) => setInstantDailyLimitInput(e.target.value)}
+                onChange={(e) => setInstantDailyLimitInput(formatNumberInputWithGrouping(e.target.value))}
                 className="font-mono mt-1"
               />
             </div>
@@ -1156,7 +1137,7 @@ export default function DepositVaultPage() {
             <label className="text-xs text-muted-foreground">Safe Approval Tolerance (%)</label>
             <Input
               value={variationToleranceInput}
-              onChange={(e) => setVariationToleranceInput(e.target.value)}
+              onChange={(e) => setVariationToleranceInput(formatNumberInputWithGrouping(e.target.value))}
               className="font-mono mt-1 max-w-xs"
             />
           </div>
@@ -1177,7 +1158,7 @@ export default function DepositVaultPage() {
             </label>
             <Input
               value={supplyCapInput}
-              onChange={(e) => setSupplyCapInput(e.target.value)}
+              onChange={(e) => setSupplyCapInput(formatNumberInputWithGrouping(e.target.value))}
               className="font-mono mt-1 max-w-xs"
               disabled={!depositVaultAddr || maxSupplyCapLoading}
             />
@@ -1192,17 +1173,8 @@ export default function DepositVaultPage() {
       </Card>
 
       <Card className="bg-card border-border">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="font-display text-sm">Payment Tokens</CardTitle>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-xs text-primary"
-            onClick={() => setShowAddToken(!showAddToken)}
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add Payment Token
-          </Button>
+        <CardHeader className="pb-3">
+          <CardTitle className="font-display text-sm">Payment Token Management</CardTitle>
         </CardHeader>
         <CardContent>
           <table className="w-full text-xs">
@@ -1238,7 +1210,7 @@ export default function DepositVaultPage() {
               ) : paymentTokenRows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-4 text-muted-foreground text-center">
-                    No payment tokens configured. Add one below.
+                    No payment tokens configured.
                   </td>
                 </tr>
               ) : (
@@ -1292,23 +1264,6 @@ export default function DepositVaultPage() {
                         >
                           Edit Allowance
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-xs h-6 px-2 text-destructive"
-                          onClick={() =>
-                            queueVaultCall(
-                              "Remove Payment Token",
-                              `${symbol} (${shortAddr(token)})`,
-                              "removePaymentToken",
-                              [token],
-                              "Payment token removed",
-                              `removePaymentToken(${token})`,
-                            )
-                          }
-                        >
-                          Remove
-                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -1316,55 +1271,6 @@ export default function DepositVaultPage() {
               )}
             </tbody>
           </table>
-          {showAddToken && (
-            <div className="mt-4 p-4 bg-secondary/30 rounded-lg space-y-3 border border-border">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground">Token Address</label>
-                  <Input
-                    value={addTokenAddress}
-                    onChange={(e) => setAddTokenAddress(e.target.value)}
-                    className="font-mono mt-1"
-                    placeholder="0x..."
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">DataFeed</label>
-                  <Input
-                    value={addTokenDataFeed}
-                    onChange={(e) => setAddTokenDataFeed(e.target.value)}
-                    className="font-mono mt-1"
-                    placeholder="0x..."
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Fee (%)</label>
-                  <Input
-                    value={addTokenFeeInput}
-                    onChange={(e) => setAddTokenFeeInput(e.target.value)}
-                    className="font-mono mt-1"
-                    placeholder="0.10"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Allowance</label>
-                  <Input
-                    value={addTokenAllowanceInput}
-                    onChange={(e) => setAddTokenAllowanceInput(e.target.value)}
-                    className="font-mono mt-1"
-                    placeholder="500000"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch checked={addTokenStable} onCheckedChange={(v) => setAddTokenStable(Boolean(v))} />
-                <span className="text-xs text-muted-foreground">Stable</span>
-              </div>
-              <Button size="sm" onClick={handleAddPaymentToken} disabled={!addPaymentTokenCanSubmit}>
-                Add
-              </Button>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -1376,37 +1282,24 @@ export default function DepositVaultPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Token</label>
-              <Select
-                value={withdrawTokenAddress || undefined}
-                onValueChange={(v) => setWithdrawTokenAddress(v)}
-                disabled={
-                  !depositVaultAddr || paymentTokensTableLoading || paymentTokenRows.length === 0
-                }
-              >
-                <SelectTrigger className="font-mono mt-1 w-full">
-                  <SelectValue placeholder="Select payment token" />
-                </SelectTrigger>
-                <SelectContent>
-                  {paymentTokenRows.map(({ token, symbol }) => (
-                    <SelectItem key={token} value={token} className="font-mono">
-                      {symbol} · {shortAddr(token)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="mt-1 rounded-md border border-border bg-muted/20 px-3 py-2 font-mono text-sm text-foreground">
+                {paymentTokenRows[0]
+                  ? `${paymentTokenRows[0].symbol} · ${shortAddr(paymentTokenRows[0].token)}`
+                  : "—"}
+              </div>
               {!depositVaultAddr ? (
                 <p className="text-xs text-muted-foreground mt-1">Load a vault to list payment tokens.</p>
               ) : paymentTokensListError ? (
                 <p className="text-xs text-destructive mt-1">Could not load payment tokens.</p>
               ) : !paymentTokensTableLoading && paymentTokenRows.length === 0 ? (
-                <p className="text-xs text-muted-foreground mt-1">No payment tokens — add one above first.</p>
+                <p className="text-xs text-muted-foreground mt-1">No payment tokens configured.</p>
               ) : null}
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Amount</label>
               <Input
                 value={withdrawAmountInput}
-                onChange={(e) => setWithdrawAmountInput(e.target.value)}
+                onChange={(e) => setWithdrawAmountInput(formatNumberInputWithGrouping(e.target.value))}
                 className={cn(
                   "font-mono mt-1",
                   withdrawAmountExceedsVaultBalance && "border-destructive focus-visible:ring-destructive/40",
@@ -1429,7 +1322,11 @@ export default function DepositVaultPage() {
                       disabled={withdrawVaultTokenBalance === 0n}
                       onClick={() => {
                         if (withdrawVaultTokenBalance === undefined || withdrawTokenDecimals == null) return;
-                        setWithdrawAmountInput(formatUnits(withdrawVaultTokenBalance, withdrawTokenDecimals));
+                        setWithdrawAmountInput(
+                          formatNumberInputWithGrouping(
+                            formatUnits(withdrawVaultTokenBalance, withdrawTokenDecimals),
+                          ),
+                        );
                       }}
                     >
                       Max
@@ -1532,13 +1429,13 @@ export default function DepositVaultPage() {
             </label>
             <Input
               value={paymentTokenEditInput}
-              onChange={(e) => setPaymentTokenEditInput(e.target.value)}
+              onChange={(e) => setPaymentTokenEditInput(formatNumberInputWithGrouping(e.target.value))}
               className="font-mono"
               placeholder={paymentTokenEditKind === "fee" ? "0.10" : "500000"}
             />
             {paymentTokenEditKind === "allowance" ? (
               <p className="text-xs text-muted-foreground">
-                Must be &gt; 0. Parsed with the same 18-decimal rules as &quot;Add Payment Token&quot;.
+                Must be &gt; 0. Uses token 18-decimal units.
               </p>
             ) : null}
           </div>
@@ -1563,8 +1460,10 @@ export default function DepositVaultPage() {
             setPendingInstantSteps([]);
             setPendingProgressMessage(undefined);
             setInstantBatchProgress(null);
+            setConfirmSuccessTxRows([]);
             setConfirmContractNote("");
             setConfirmActionContractNote("");
+            setConfirmValueLabel(undefined);
             setConfirmValueRows(null);
           }
         }}
@@ -1573,11 +1472,12 @@ export default function DepositVaultPage() {
         newValue={confirmValue}
         newValueSecondary={confirmContractNote || undefined}
         newValueLabel={
-          pendingInstantSteps.length
+          confirmValueLabel ??
+          (pendingInstantSteps.length
             ? "Batch"
             : confirmContractNote || confirmActionContractNote
               ? "Summary"
-              : "New Value"
+              : "New Value")
         }
         valueRows={confirmValueRows ?? undefined}
         summaryRows={
@@ -1605,6 +1505,7 @@ export default function DepositVaultPage() {
           pendingProgressMessage ?? "Submit in your wallet and wait for the transaction to be mined."
         }
         batchProgress={instantBatchProgress}
+        successTxRows={confirmSuccessTxRows}
       />
     </div>
   );

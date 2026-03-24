@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, AlertTriangle, Copy, ExternalLink } from "lucide-react";
-import { ConfirmActionModal, type ConfirmSummaryRow } from "@/components/curator-console/ConfirmActionModal";
+import {
+  ConfirmActionModal,
+  type ConfirmSuccessTxRow,
+  type ConfirmSummaryRow,
+} from "@/components/curator-console/ConfirmActionModal";
 import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
 import { useVaultDetailQuery } from "@/hooks/queries/useVaultDetailQuery";
 import { useNavHistoryQuery } from "@/hooks/queries/useNavHistoryQuery";
@@ -227,6 +231,7 @@ export default function NAVManagementPage() {
   const [localNavTxLog, setLocalNavTxLog] = useState<NavHistoryRow[]>([]);
   /** Multi-step DataFeed confirm: current/total for modal progress UI. */
   const [feedBatchProgress, setFeedBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  const [confirmSuccessTxRows, setConfirmSuccessTxRows] = useState<ConfirmSuccessTxRow[]>([]);
 
   const chainSupported = typeof chainId === "number" && supportedWagmiChainIds.has(chainId);
   const showContractDevHints = showConfirmModalContractDetails();
@@ -668,6 +673,7 @@ export default function NAVManagementPage() {
     );
     setFeedSummaryRows([]);
     setPlannedFeedSteps([]);
+    setConfirmSuccessTxRows([]);
     setConfirmOpen(true);
   };
 
@@ -720,6 +726,12 @@ export default function NAVManagementPage() {
         hash,
       );
     }
+    setConfirmSuccessTxRows([
+      {
+        label: functionName === "setRoundDataSafe" ? "Set NAV (Safe) Tx" : "Set NAV Tx",
+        hash,
+      },
+    ]);
 
     const baselineNav = chainNavSnapshot != null && chainNavSnapshot.nav > 0 ? chainNavSnapshot.nav : currentNav;
     const snap = await readAggregatorLatestNav(publicClient, {
@@ -787,6 +799,7 @@ export default function NAVManagementPage() {
     };
 
     const total = plannedFeedSteps.length;
+    const successRows: ConfirmSuccessTxRow[] = [];
     try {
       for (let i = 0; i < total; i += 1) {
         const step = plannedFeedSteps[i];
@@ -806,6 +819,13 @@ export default function NAVManagementPage() {
         if (typeof chainId === "number") {
           toastChainTxSuccess(stepTitles[step.functionName], chainId, hash);
         }
+        const successLabel: Record<PlannedFeedStep["functionName"], string> = {
+          setHealthyDiff: "Set Staleness Limit Tx",
+          setMinExpectedAnswer: "Set Min NAV Price Tx",
+          setMaxExpectedAnswer: "Set Max NAV Price Tx",
+        };
+        successRows.push({ label: successLabel[step.functionName], hash });
+        setConfirmSuccessTxRows([...successRows]);
       }
 
       await refetchFeedReads();
@@ -899,6 +919,7 @@ export default function NAVManagementPage() {
     setConfirmKind("feed");
     setConfirmAction("Update oracle feed settings");
     setConfirmValue(`${steps.length} transaction${steps.length > 1 ? "s" : ""}`);
+    setConfirmSuccessTxRows([]);
     setConfirmOpen(true);
   };
 
@@ -910,6 +931,7 @@ export default function NAVManagementPage() {
       setNavSubmitKind(null);
       setConfirmActionContractNote(undefined);
       setFeedBatchProgress(null);
+      setConfirmSuccessTxRows([]);
       setConfirmKind("nav");
     }
   };
@@ -1472,6 +1494,7 @@ export default function NAVManagementPage() {
               : undefined
         }
         batchProgress={confirmKind === "feed" ? feedBatchProgress : null}
+        successTxRows={confirmSuccessTxRows}
       />
     </div>
   );

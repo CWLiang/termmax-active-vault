@@ -3,6 +3,8 @@ import type {
   ActivityResponseDto,
   AllocationResponseDto,
   NavSnapshotDto,
+  RedeemRequestListResponseDto,
+  RequestStatus,
   RiskResponseDto,
   VaultDetailDto,
   VaultListResponseDto,
@@ -62,6 +64,28 @@ export function getActivity(
       page: opts.page ?? 1,
       type: opts.type ?? "all",
       search: opts.search,
+    })}`,
+  );
+}
+
+export function getRedeemRequests(
+  chainId: number,
+  mTokenAddress: string,
+  opts: {
+    status?: RequestStatus;
+    user?: string;
+    limit?: number;
+    page?: number;
+    sortOrder?: "asc" | "desc";
+  } = {},
+): Promise<RedeemRequestListResponseDto> {
+  return apiGet(
+    `/vaults/${chainId}/${mTokenAddress}/redeem-requests${buildQuery({
+      status: opts.status,
+      user: opts.user,
+      limit: opts.limit ?? 10,
+      page: opts.page ?? 1,
+      sortOrder: opts.sortOrder ?? "desc",
     })}`,
   );
 }

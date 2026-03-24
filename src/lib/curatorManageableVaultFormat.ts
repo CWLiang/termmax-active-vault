@@ -1,5 +1,5 @@
 import { formatUnits, isAddress, parseUnits } from "viem";
-import { formatDisplayNumber, formatNumberKmb } from "./formatNumbers";
+import { formatDisplayNumber, formatNumberKmb, stripNumberGrouping } from "./formatNumbers";
 
 /** Matches `addPaymentToken` / on-chain token allowance storage (base-18 style amount). */
 export const PAYMENT_ALLOWANCE_DECIMALS = 18;
@@ -118,12 +118,15 @@ export function parseInstantSettingsInputs(
   instantDailyLimitInput: string,
   mTokenDecimals: number | undefined,
 ): InstantSettingsParseResult {
-  const feePercent = Number(instantFeeInput);
+  const feePercent = Number(stripNumberGrouping(instantFeeInput));
   if (!Number.isFinite(feePercent) || feePercent < 0) return { ok: false, reason: "fee" };
   const feeRaw = BigInt(Math.round(feePercent * 100));
   let dailyLimit: bigint;
   try {
-    dailyLimit = parseUnits(instantDailyLimitInput || "0", mTokenDecimals != null ? Number(mTokenDecimals) : 18);
+    dailyLimit = parseUnits(
+      stripNumberGrouping(instantDailyLimitInput) || "0",
+      mTokenDecimals != null ? Number(mTokenDecimals) : 18,
+    );
   } catch {
     return { ok: false, reason: "daily_invalid" };
   }

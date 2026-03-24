@@ -4,7 +4,6 @@ import {
   TrendingUp,
   ArrowRightLeft,
   ArrowDownToLine,
-  FileText,
   ChevronLeft,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -27,7 +26,6 @@ const vaultNavItems = [
   { title: "NAV Management", segment: "nav" as const, icon: TrendingUp, badge: "high" as const },
   { title: "Redemption Management", segment: "redemption" as const, icon: ArrowRightLeft, badge: "high" as const },
   { title: "Depsoit Management", segment: "deposit" as const, icon: ArrowDownToLine },
-  { title: "Audit Log", segment: "audit-log" as const, icon: FileText },
 ];
 
 export function CuratorSidebar() {
