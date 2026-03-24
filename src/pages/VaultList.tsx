@@ -8,15 +8,10 @@ import { useState } from "react";
 import { useVaultListData } from "@/hooks/queries/useVaultListData";
 import { useAccount } from "wagmi";
 import { vaultDetailPath } from "@/domain/vaults/mappers";
+import { formatDisplayNumber, formatUsdCompact, formatUsdWithCents } from "@/lib/formatNumbers";
 
 function formatUSD(value: number) {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
-}
-
-function formatUSDExact(value: number) {
-  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return formatUsdCompact(value, "list");
 }
 
 export default function VaultListPage() {
@@ -68,11 +63,15 @@ export default function VaultListPage() {
         <StatCard label="Total TVL" value={formatUSD(totalTVL)} icon={<DollarSign className="h-4 w-4" />} />
         <StatCard
           label="Avg APY (7d)"
-          value={`${avgApy7d.toFixed(2)}%`}
+          value={`${formatDisplayNumber(avgApy7d, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`}
           variant="primary"
           icon={<TrendingUp className="h-4 w-4" />}
         />
-        <StatCard label="Active Vaults" value={vaults.length.toString()} icon={<Users className="h-4 w-4" />} />
+        <StatCard
+          label="Active Vaults"
+          value={formatDisplayNumber(vaults.length, { maximumFractionDigits: 0 })}
+          icon={<Users className="h-4 w-4" />}
+        />
       </motion.div>
 
       {/* My Positions — visible when wallet connected */}
@@ -103,10 +102,10 @@ export default function VaultListPage() {
               <div className="text-right">
                 <div className="text-xs text-muted-foreground font-mono">Total Redeemable</div>
                 <div className="text-lg font-display font-bold text-foreground">
-                  {totalRedeemableUSDC.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
+                  {formatDisplayNumber(totalRedeemableUSDC, { maximumFractionDigits: 2 })}{" "}
                   {userPositions[0]?.underlyingSymbol ?? "USD"}
                 </div>
-                <div className="text-xs text-muted-foreground font-mono">≈ {formatUSDExact(totalRedeemableUSD)}</div>
+                <div className="text-xs text-muted-foreground font-mono">≈ {formatUsdWithCents(totalRedeemableUSD)}</div>
               </div>
               {positionsExpanded ? (
                 <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -140,13 +139,16 @@ export default function VaultListPage() {
                         <div className="text-right">
                           <div className="text-xs text-muted-foreground font-mono">Position</div>
                           <div className="text-sm font-mono text-foreground font-semibold">
-                            {pos.redeemableUSDC.toLocaleString(undefined, { maximumFractionDigits: 2 })} {pos.underlyingSymbol}
+                            {formatDisplayNumber(pos.redeemableUSDC, { maximumFractionDigits: 2 })}{" "}
+                            {pos.underlyingSymbol}
                           </div>
-                          <div className="text-xs font-mono text-muted-foreground">≈ {formatUSDExact(pos.redeemableUSD)}</div>
+                          <div className="text-xs font-mono text-muted-foreground">≈ {formatUsdWithCents(pos.redeemableUSD)}</div>
                         </div>
                         <div className="text-right">
                           <div className="text-xs text-muted-foreground font-mono">APY</div>
-                          <div className="text-sm font-mono text-primary">{pos.apy7d}%</div>
+                          <div className="text-sm font-mono text-primary">
+                            {formatDisplayNumber(pos.apy7d, { maximumFractionDigits: 2 })}%
+                          </div>
                         </div>
                         <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
@@ -184,7 +186,9 @@ export default function VaultListPage() {
                     <span className="font-mono">{vault.curator}</span>
                     <span className="text-border">•</span>
                     <Clock className="h-3.5 w-3.5" />
-                    <span className="font-mono">{vault.trackRecordDays}d track record</span>
+                    <span className="font-mono">
+                      {formatDisplayNumber(vault.trackRecordDays, { maximumFractionDigits: 0 })}d track record
+                    </span>
                   </div>
                 </div>
 
@@ -192,8 +196,12 @@ export default function VaultListPage() {
                 <div className="flex gap-6 lg:gap-8">
                   <div className="text-center">
                     <div className="text-xs text-muted-foreground font-mono mb-1">APY (7d)</div>
-                    <div className="text-2xl font-display font-bold text-primary">{vault.apy7d}%</div>
-                    <div className="text-xs font-mono text-muted-foreground">{vault.apy30d}% 30d</div>
+                    <div className="text-2xl font-display font-bold text-primary">
+                      {formatDisplayNumber(vault.apy7d, { maximumFractionDigits: 2 })}%
+                    </div>
+                    <div className="text-xs font-mono text-muted-foreground">
+                      {formatDisplayNumber(vault.apy30d, { maximumFractionDigits: 2 })}% 30d
+                    </div>
                   </div>
                   <div className="text-center">
                     <div className="text-xs text-muted-foreground font-mono mb-1">TVL</div>

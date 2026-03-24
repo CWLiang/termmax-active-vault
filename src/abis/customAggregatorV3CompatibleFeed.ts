@@ -5,6 +5,13 @@
 export const customAggregatorV3CompatibleFeedAbi = [
   {
     type: "function",
+    name: "maxAnswerDeviation",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "setRoundDataSafe",
     stateMutability: "nonpayable",
     inputs: [{ name: "_data", type: "int256" }],

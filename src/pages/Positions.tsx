@@ -5,6 +5,7 @@ import { useAccount } from "wagmi";
 import { useVaultListData } from "@/hooks/queries/useVaultListData";
 import { useNavigate } from "react-router-dom";
 import { vaultDetailPath } from "@/domain/vaults/mappers";
+import { formatDisplayNumber } from "@/lib/formatNumbers";
 
 export default function PositionsPage() {
   const { isConnected, address } = useAccount();
@@ -50,14 +51,22 @@ export default function PositionsPage() {
         transition={{ delay: 0.1 }}
         className="grid grid-cols-1 sm:grid-cols-3 gap-4"
       >
-        <StatCard label="Positions" value={positions.length.toString()} icon={<DollarSign className="h-4 w-4" />} />
+        <StatCard
+          label="Positions"
+          value={formatDisplayNumber(positions.length, { maximumFractionDigits: 0 })}
+          icon={<DollarSign className="h-4 w-4" />}
+        />
         <StatCard
           label="Total estimated value"
-          value={`$${totalValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+          value={`$${formatDisplayNumber(totalValue, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           variant="primary"
           icon={<TrendingUp className="h-4 w-4" />}
         />
-        <StatCard label="Avg APY (7d, weighted)" value={`${weightApy.toFixed(2)}%`} variant="accent" />
+        <StatCard
+          label="Avg APY (7d, weighted)"
+          value={`${formatDisplayNumber(weightApy, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`}
+          variant="accent"
+        />
       </motion.div>
 
       <motion.div
@@ -83,12 +92,18 @@ export default function PositionsPage() {
                     <h4 className="font-display font-semibold text-foreground">{pos.vaultName}</h4>
                     <p className="text-xs text-muted-foreground font-mono mt-0.5 flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {pos.shares.toLocaleString(undefined, { maximumFractionDigits: 4 })} shares · NAV ${pos.pricePerShare.toFixed(4)} (USD/share) · APY {pos.apy7d}%
+                      {formatDisplayNumber(pos.shares, { maximumFractionDigits: 4 })} shares · NAV $
+                      {formatDisplayNumber(pos.pricePerShare, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}{" "}
+                      (USD/share) · APY {formatDisplayNumber(pos.apy7d, { maximumFractionDigits: 2 })}%
                     </p>
                   </div>
                   <div className="text-right">
                     <div className="font-mono text-lg text-foreground font-bold">
-                      ${pos.redeemableUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      $
+                      {formatDisplayNumber(pos.redeemableUSD, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
                     </div>
                     <div className="font-mono text-sm text-muted-foreground">{pos.underlyingSymbol}</div>
                   </div>

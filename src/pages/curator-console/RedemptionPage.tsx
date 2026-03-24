@@ -3,24 +3,49 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, Plus, AlertTriangle, Copy, ExternalLink } from "lucide-react";
+import { ChevronDown, Plus, AlertTriangle } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { ConfirmActionModal } from "@/components/curator-console/ConfirmActionModal";
-import { useAccount, useChainId, usePublicClient, useReadContract, useWriteContract } from "wagmi";
+import {
+  ConfirmActionModal,
+  type ConfirmModalValueRow,
+} from "@/components/curator-console/ConfirmActionModal";
+import { useAccount, useChainId, usePublicClient, useReadContract, useReadContracts, useWriteContract } from "wagmi";
 import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
 import { useVaultDetailQuery } from "@/hooks/queries/useVaultDetailQuery";
 import { manageableVaultAbi } from "@/abis/manageableVault";
 import { mTokenAbi } from "@/abis/mToken";
+import { erc20Abi } from "@/abis/erc20";
 import { formatUnits, isAddress, parseUnits } from "viem";
-import { getExplorerAddressUrl } from "@/lib/explorer";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastChainTxSuccess } from "@/lib/toastChainTx";
+import { formatDisplayNumber } from "@/lib/formatNumbers";
+import { showConfirmModalContractDetails } from "@/lib/confirm-modal-env";
+import { ManageableVaultAddressWithActions } from "@/components/curator-console/ManageableVaultAddressWithActions";
+import {
+  PAYMENT_ALLOWANCE_DECIMALS,
+  shortAddr,
+  formatAmount,
+  formatFeePercent,
+  formatPaymentAllowanceDisplay,
+  readContractsSuccessResult,
+  parsePaymentTokenDecimalsRead,
+  parseTokenConfigResult,
+  parseInstantSettingsInputs,
+} from "@/lib/curatorManageableVaultFormat";
 
 const requests = [
   { id: 1042, address: "0xAB12…", amount: "50,000", date: "2026-03-19" },
@@ -30,57 +55,6 @@ const requests = [
 
 const CURRENT_NAV = "1.1162";
 
-function shortAddr(a?: string) {
-  if (!a) return "—";
-  return a.length > 12 ? `${a.slice(0, 6)}...${a.slice(-4)}` : a;
-}
-
-function formatAmount(raw: bigint | undefined, decimals: number | undefined, maxFrac = 2) {
-  if (raw == null) return "—";
-  const d = decimals ?? 18;
-  const n = Number(formatUnits(raw, d));
-  if (!Number.isFinite(n)) return "—";
-  return n.toLocaleString(undefined, { maximumFractionDigits: maxFrac });
-}
-
-function formatFeePercent(raw: bigint | undefined) {
-  if (raw == null) return "—";
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return "—";
-  return `${(n / 100).toFixed(2)}%`;
-}
-
-function AddressWithActions({
-  addr,
-  chainId,
-}: {
-  addr?: string;
-  chainId?: number;
-}) {
-  if (!addr) return <span className="font-mono text-sm text-foreground">—</span>;
-  const explorer = Number.isFinite(chainId) ? getExplorerAddressUrl(chainId as number, addr) : undefined;
-  return (
-    <div className="font-mono text-sm text-foreground flex items-center gap-1.5">
-      <span>{shortAddr(addr)}</span>
-      <button
-        type="button"
-        className="text-muted-foreground hover:text-foreground"
-        onClick={() => {
-          void navigator.clipboard.writeText(addr);
-          toast.success("Address copied");
-        }}
-      >
-        <Copy className="h-3.5 w-3.5" />
-      </button>
-      {explorer ? (
-        <a href={explorer} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground">
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      ) : null}
-    </div>
-  );
-}
-
 export default function RedemptionPage() {
   const { address: walletAddress, isConnected } = useAccount();
   const { vault, chainId, mTokenAddress, valid } = useCuratorVaultSummary();
@@ -88,6 +62,7 @@ export default function RedemptionPage() {
   const publicClient = usePublicClient({ chainId });
   const { mutateAsync: writeContractAsync } = useWriteContract();
   const { data: vaultDetail } = useVaultDetailQuery(valid ? chainId : undefined, valid ? mTokenAddress : undefined);
+  const showContractDevHints = showConfirmModalContractDetails();
   const vaultAddress = vaultDetail?.redemptionVaultAddress;
   const mToken = isAddress(mTokenAddress) ? mTokenAddress : undefined;
 
@@ -141,6 +116,18 @@ export default function RedemptionPage() {
     chainId,
     query: { enabled: Boolean(vaultAddress) },
   });
+  const {
+    data: onChainVariationTolerance,
+    refetch: refetchVariationTolerance,
+    isLoading: variationToleranceLoading,
+    isError: variationToleranceReadError,
+  } = useReadContract({
+    address: vaultAddress as `0x${string}` | undefined,
+    abi: manageableVaultAbi,
+    functionName: "variationTolerance",
+    chainId,
+    query: { enabled: Boolean(vaultAddress) },
+  });
   const { data: requestRedeemer, refetch: refetchRequestRedeemer } = useReadContract({
     address: vaultAddress as `0x${string}` | undefined,
     abi: manageableVaultAbi,
@@ -148,6 +135,101 @@ export default function RedemptionPage() {
     chainId,
     query: { enabled: Boolean(vaultAddress) },
   });
+
+  const paymentVaultAddr =
+    vaultAddress && isAddress(vaultAddress) ? (vaultAddress as `0x${string}`) : undefined;
+  const {
+    data: paymentTokenAddressesRaw,
+    refetch: refetchPaymentTokens,
+    isLoading: paymentTokensListLoading,
+    isError: paymentTokensListError,
+  } = useReadContract({
+    address: paymentVaultAddr,
+    abi: manageableVaultAbi,
+    functionName: "getPaymentTokens",
+    chainId,
+    query: { enabled: Boolean(paymentVaultAddr) },
+  });
+  const paymentTokenAddresses = useMemo(() => {
+    if (!paymentTokenAddressesRaw || !Array.isArray(paymentTokenAddressesRaw)) {
+      return [] as readonly `0x${string}`[];
+    }
+    return paymentTokenAddressesRaw.filter(
+      (a): a is `0x${string}` => typeof a === "string" && isAddress(a),
+    );
+  }, [paymentTokenAddressesRaw]);
+
+  const tokensConfigContracts = useMemo(
+    () =>
+      !paymentVaultAddr || paymentTokenAddresses.length === 0
+        ? ([] as const)
+        : paymentTokenAddresses.map((token) => ({
+            address: paymentVaultAddr,
+            abi: manageableVaultAbi,
+            functionName: "tokensConfig" as const,
+            args: [token] as const,
+            chainId,
+          })),
+    [paymentVaultAddr, paymentTokenAddresses, chainId],
+  );
+  const tokenSymbolContracts = useMemo(
+    () =>
+      paymentTokenAddresses.length === 0
+        ? ([] as const)
+        : paymentTokenAddresses.map((token) => ({
+            address: token,
+            abi: mTokenAbi,
+            functionName: "symbol" as const,
+            chainId,
+          })),
+    [paymentTokenAddresses, chainId],
+  );
+
+  const {
+    data: tokensConfigBatch,
+    isFetching: tokensConfigFetching,
+    refetch: refetchTokensConfigs,
+  } = useReadContracts({
+    contracts: tokensConfigContracts,
+    query: { enabled: Boolean(paymentVaultAddr) && tokensConfigContracts.length > 0 },
+  });
+  const { data: tokenSymbolsBatch, isFetching: tokenSymbolsFetching } = useReadContracts({
+    contracts: tokenSymbolContracts,
+    query: { enabled: tokenSymbolContracts.length > 0 },
+  });
+
+  const tokenDecimalsContracts = useMemo(
+    () =>
+      paymentTokenAddresses.length === 0
+        ? ([] as const)
+        : paymentTokenAddresses.map((token) => ({
+            address: token,
+            abi: mTokenAbi,
+            functionName: "decimals" as const,
+            chainId,
+          })),
+    [paymentTokenAddresses, chainId],
+  );
+  const { data: tokenDecimalsBatch, isFetching: tokenDecimalsFetching } = useReadContracts({
+    contracts: tokenDecimalsContracts,
+    query: { enabled: tokenDecimalsContracts.length > 0 },
+  });
+
+  const paymentTokenRows = useMemo(() => {
+    return paymentTokenAddresses.map((token, i) => {
+      const raw = readContractsSuccessResult<unknown>(tokensConfigBatch?.[i]);
+      const cfg = parseTokenConfigResult(raw);
+      const sym = readContractsSuccessResult<string>(tokenSymbolsBatch?.[i]);
+      const decimals = parsePaymentTokenDecimalsRead(tokenDecimalsBatch?.[i]);
+      return { token, symbol: sym ?? shortAddr(token), cfg, decimals };
+    });
+  }, [paymentTokenAddresses, tokensConfigBatch, tokenSymbolsBatch, tokenDecimalsBatch]);
+
+  const paymentTokensTableLoading =
+    paymentTokensListLoading ||
+    (paymentTokenAddresses.length > 0 &&
+      (tokensConfigFetching || tokenSymbolsFetching || tokenDecimalsFetching));
+
   useEffect(() => {
     if (instantFee != null) setInstantFeeInput((Number(instantFee) / 100).toFixed(2));
   }, [instantFee]);
@@ -158,6 +240,11 @@ export default function RedemptionPage() {
       );
     }
   }, [instantDailyLimit, mTokenDecimals]);
+  useEffect(() => {
+    if (onChainVariationTolerance != null) {
+      setVariationToleranceInput((Number(onChainVariationTolerance) / 100).toFixed(2));
+    }
+  }, [onChainVariationTolerance]);
   const walletRows = useMemo(
     () => [
       { label: "Management Wallet", addr: tokensReceiver ? String(tokensReceiver) : undefined },
@@ -170,6 +257,10 @@ export default function RedemptionPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState("");
   const [confirmValue, setConfirmValue] = useState("");
+  const [confirmValueRows, setConfirmValueRows] = useState<ConfirmModalValueRow[] | null>(null);
+  const [confirmContractNote, setConfirmContractNote] = useState("");
+  /** Function + args footnote under Action (dev-gated in modal). */
+  const [confirmActionContractNote, setConfirmActionContractNote] = useState("");
   const [pendingVaultCall, setPendingVaultCall] = useState<{
     functionName:
       | "setTokensReceiver"
@@ -179,6 +270,9 @@ export default function RedemptionPage() {
       | "setInstantDailyLimit"
       | "setVariationTolerance"
       | "addPaymentToken"
+      | "removePaymentToken"
+      | "changeTokenFee"
+      | "changeTokenAllowance"
       | "withdrawToken";
     args: readonly unknown[];
     successTitle: string;
@@ -187,18 +281,33 @@ export default function RedemptionPage() {
     functionName: "setInstantFee" | "setInstantDailyLimit";
     args: readonly unknown[];
     successTitle: string;
-    summary: string;
+    human: string;
+    contractNote: string;
   }>>([]);
   const [pendingProgressMessage, setPendingProgressMessage] = useState<string | undefined>(undefined);
+  const [instantBatchProgress, setInstantBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [walletEditOpen, setWalletEditOpen] = useState(false);
   const [walletEditKind, setWalletEditKind] = useState<"management" | "fee" | "redeemer" | null>(null);
   const [walletEditValue, setWalletEditValue] = useState("");
+  /** Lowercased trim of address when modal opened — Continue disabled until input differs. */
+  const [walletEditBaseline, setWalletEditBaseline] = useState("");
+
+  const [paymentTokenEditOpen, setPaymentTokenEditOpen] = useState(false);
+  const [paymentTokenEditKind, setPaymentTokenEditKind] = useState<"fee" | "allowance" | null>(null);
+  const [paymentTokenEditToken, setPaymentTokenEditToken] = useState<`0x${string}` | "">("");
+  const [paymentTokenEditSymbol, setPaymentTokenEditSymbol] = useState("");
+  const [paymentTokenEditInput, setPaymentTokenEditInput] = useState("");
+  const [paymentTokenEditOnChainFee, setPaymentTokenEditOnChainFee] = useState<bigint | null>(null);
+  const [paymentTokenEditOnChainAllowance, setPaymentTokenEditOnChainAllowance] = useState<bigint | null>(
+    null,
+  );
 
   // New rate modal
   const [rateModalOpen, setRateModalOpen] = useState(false);
   const [rateModalAction, setRateModalAction] = useState("");
   const [rateModalLabel, setRateModalLabel] = useState("");
   const [newRate, setNewRate] = useState(CURRENT_NAV);
+  const [rateModalBaselineNav, setRateModalBaselineNav] = useState(CURRENT_NAV);
 
   // Vault settings
   const [showAddToken, setShowAddToken] = useState(false);
@@ -214,6 +323,186 @@ export default function RedemptionPage() {
   const [withdrawAmountInput, setWithdrawAmountInput] = useState("");
   const [withdrawToAddress, setWithdrawToAddress] = useState("");
 
+  const withdrawTokenDecimals = useMemo(() => {
+    if (!isAddress(withdrawTokenAddress.trim())) return undefined;
+    const t = withdrawTokenAddress.trim().toLowerCase();
+    return paymentTokenRows.find((r) => r.token.toLowerCase() === t)?.decimals;
+  }, [withdrawTokenAddress, paymentTokenRows]);
+
+  useEffect(() => {
+    const first = paymentTokenRows[0]?.token;
+    if (!first) {
+      setWithdrawTokenAddress("");
+      return;
+    }
+    if (!withdrawTokenAddress.trim()) {
+      setWithdrawTokenAddress(first);
+      return;
+    }
+    const inList = paymentTokenRows.some(
+      (r) => r.token.toLowerCase() === withdrawTokenAddress.toLowerCase(),
+    );
+    if (!inList) setWithdrawTokenAddress(first);
+  }, [paymentTokenRows, withdrawTokenAddress]);
+
+  const withdrawErc20Addr =
+    withdrawTokenAddress.trim() && isAddress(withdrawTokenAddress.trim())
+      ? (withdrawTokenAddress.trim() as `0x${string}`)
+      : undefined;
+  const withdrawBalanceVaultAddr =
+    vaultAddress && isAddress(vaultAddress) ? (vaultAddress as `0x${string}`) : undefined;
+  const withdrawVaultBalanceEnabled = Boolean(
+    withdrawErc20Addr && withdrawBalanceVaultAddr && withdrawTokenDecimals != null,
+  );
+
+  const {
+    data: withdrawVaultTokenBalanceRaw,
+    isLoading: withdrawVaultTokenBalanceLoading,
+    isError: withdrawVaultTokenBalanceError,
+    refetch: refetchWithdrawVaultTokenBalance,
+  } = useReadContract({
+    address: withdrawErc20Addr,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: withdrawBalanceVaultAddr ? [withdrawBalanceVaultAddr] : undefined,
+    chainId,
+    query: { enabled: withdrawVaultBalanceEnabled },
+  });
+
+  const withdrawVaultTokenBalance =
+    typeof withdrawVaultTokenBalanceRaw === "bigint" ? withdrawVaultTokenBalanceRaw : undefined;
+
+  const withdrawParsedAmountRaw = useMemo(() => {
+    if (withdrawTokenDecimals == null) return null;
+    try {
+      return parseUnits(withdrawAmountInput.trim() || "0", withdrawTokenDecimals);
+    } catch {
+      return null;
+    }
+  }, [withdrawAmountInput, withdrawTokenDecimals]);
+
+  const withdrawVaultBalanceReady =
+    withdrawVaultBalanceEnabled &&
+    !withdrawVaultTokenBalanceLoading &&
+    !withdrawVaultTokenBalanceError &&
+    withdrawVaultTokenBalance !== undefined;
+
+  const withdrawAmountExceedsVaultBalance = useMemo(() => {
+    if (withdrawVaultTokenBalance === undefined) return false;
+    if (withdrawParsedAmountRaw == null) return false;
+    return withdrawParsedAmountRaw > withdrawVaultTokenBalance;
+  }, [withdrawVaultTokenBalance, withdrawParsedAmountRaw]);
+
+  const instantSettingsTxCount = useMemo(() => {
+    const dec = mTokenDecimals != null ? Number(mTokenDecimals) : undefined;
+    const parsed = parseInstantSettingsInputs(instantFeeInput, instantDailyLimitInput, dec);
+    if (!parsed.ok) return null;
+    let n = 0;
+    if (instantFee == null || parsed.feeRaw !== instantFee) n += 1;
+    if (instantDailyLimit == null || parsed.dailyLimit !== instantDailyLimit) n += 1;
+    return n;
+  }, [
+    instantFeeInput,
+    instantDailyLimitInput,
+    mTokenDecimals,
+    instantFee,
+    instantDailyLimit,
+  ]);
+
+  const variationToleranceCanSave = useMemo(() => {
+    if (!vaultAddress) return false;
+    if (variationToleranceLoading || variationToleranceReadError) return false;
+    if (onChainVariationTolerance === undefined) return false;
+    const pct = Number(variationToleranceInput);
+    if (!Number.isFinite(pct) || pct < 0) return false;
+    const toleranceRaw = BigInt(Math.round(pct * 100));
+    return toleranceRaw !== onChainVariationTolerance;
+  }, [
+    vaultAddress,
+    variationToleranceLoading,
+    variationToleranceReadError,
+    onChainVariationTolerance,
+    variationToleranceInput,
+  ]);
+
+  const addPaymentTokenCanSubmit = useMemo(() => {
+    if (!isAddress(addTokenAddress.trim()) || !isAddress(addTokenDataFeed.trim())) return false;
+    const feePct = Number(addTokenFeeInput);
+    if (!Number.isFinite(feePct) || feePct < 0) return false;
+    try {
+      parseUnits(addTokenAllowanceInput || "0", PAYMENT_ALLOWANCE_DECIMALS);
+    } catch {
+      return false;
+    }
+    return true;
+  }, [addTokenAddress, addTokenDataFeed, addTokenFeeInput, addTokenAllowanceInput]);
+
+  const withdrawTokenCanSubmit = useMemo(() => {
+    if (!isAddress(withdrawTokenAddress.trim()) || !isAddress(withdrawToAddress.trim())) return false;
+    if (withdrawTokenDecimals == null) return false;
+    if (withdrawParsedAmountRaw == null || withdrawParsedAmountRaw <= 0n) return false;
+    if (!withdrawVaultBalanceReady) return false;
+    if (withdrawVaultTokenBalance === undefined) return false;
+    return withdrawParsedAmountRaw <= withdrawVaultTokenBalance;
+  }, [
+    withdrawTokenAddress,
+    withdrawToAddress,
+    withdrawTokenDecimals,
+    withdrawParsedAmountRaw,
+    withdrawVaultBalanceReady,
+    withdrawVaultTokenBalance,
+  ]);
+
+  const walletEditCanContinue = useMemo(() => {
+    const t = walletEditValue.trim();
+    if (!isAddress(t)) return false;
+    return t.toLowerCase() !== walletEditBaseline;
+  }, [walletEditValue, walletEditBaseline]);
+
+  const paymentTokenEditFeeCanContinue = useMemo(() => {
+    if (paymentTokenEditKind !== "fee") return false;
+    if (!isAddress(paymentTokenEditToken) || paymentTokenEditOnChainFee == null) return false;
+    const pct = Number(paymentTokenEditInput);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) return false;
+    const feeRaw = BigInt(Math.round(pct * 100));
+    if (feeRaw > 10000n) return false;
+    return feeRaw !== paymentTokenEditOnChainFee;
+  }, [
+    paymentTokenEditKind,
+    paymentTokenEditToken,
+    paymentTokenEditInput,
+    paymentTokenEditOnChainFee,
+  ]);
+
+  const paymentTokenEditAllowanceCanContinue = useMemo(() => {
+    if (paymentTokenEditKind !== "allowance") return false;
+    if (!isAddress(paymentTokenEditToken) || paymentTokenEditOnChainAllowance == null) return false;
+    let raw: bigint;
+    try {
+      raw = parseUnits(paymentTokenEditInput.trim() || "0", PAYMENT_ALLOWANCE_DECIMALS);
+    } catch {
+      return false;
+    }
+    if (raw <= 0n) return false;
+    return raw !== paymentTokenEditOnChainAllowance;
+  }, [
+    paymentTokenEditKind,
+    paymentTokenEditToken,
+    paymentTokenEditInput,
+    paymentTokenEditOnChainAllowance,
+  ]);
+
+  const paymentTokenEditCanContinue =
+    paymentTokenEditKind === "fee"
+      ? paymentTokenEditFeeCanContinue
+      : paymentTokenEditKind === "allowance"
+        ? paymentTokenEditAllowanceCanContinue
+        : false;
+
+  const rateModalCanSubmit = useMemo(() => {
+    return newRate.trim() !== rateModalBaselineNav.trim();
+  }, [newRate, rateModalBaselineNav]);
+
   const toggleSelect = (id: number) => {
     setSelected((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
   };
@@ -223,9 +512,25 @@ export default function RedemptionPage() {
     else setSelected(requests.map((r) => r.id));
   };
 
-  const openConfirm = (action: string, value?: string) => {
+  const openConfirm = (
+    action: string,
+    value?: string,
+    contractNote?: string,
+    pinContractNoteUnderAction?: boolean,
+    valueRows?: ConfirmModalValueRow[] | null,
+  ) => {
     setConfirmAction(action);
     setConfirmValue(value || "");
+    setConfirmValueRows(
+      valueRows != null && valueRows.length > 0 ? valueRows : null,
+    );
+    if (pinContractNoteUnderAction && contractNote) {
+      setConfirmActionContractNote(contractNote);
+      setConfirmContractNote("");
+    } else {
+      setConfirmContractNote(contractNote ?? "");
+      setConfirmActionContractNote("");
+    }
     setConfirmOpen(true);
   };
 
@@ -234,6 +539,8 @@ export default function RedemptionPage() {
     current?: string,
   ) => {
     setWalletEditKind(kind);
+    const c = (current ?? "").trim();
+    setWalletEditBaseline(c.toLowerCase());
     setWalletEditValue(current ?? "");
     setWalletEditOpen(true);
   };
@@ -263,10 +570,92 @@ export default function RedemptionPage() {
       args: [t as `0x${string}`],
       successTitle: `${label} updated`,
     });
-    openConfirm(label, t);
+    openConfirm(label, t, `${functionName}(${t})`, true);
+  };
+
+  const openEditPaymentTokenFee = (
+    token: `0x${string}`,
+    symbol: string,
+    feeRaw: bigint,
+  ) => {
+    setPaymentTokenEditKind("fee");
+    setPaymentTokenEditToken(token);
+    setPaymentTokenEditSymbol(symbol);
+    setPaymentTokenEditInput((Number(feeRaw) / 100).toFixed(2));
+    setPaymentTokenEditOnChainFee(feeRaw);
+    setPaymentTokenEditOnChainAllowance(null);
+    setPaymentTokenEditOpen(true);
+  };
+
+  const openEditPaymentTokenAllowance = (
+    token: `0x${string}`,
+    symbol: string,
+    allowanceRaw: bigint,
+  ) => {
+    setPaymentTokenEditKind("allowance");
+    setPaymentTokenEditToken(token);
+    setPaymentTokenEditSymbol(symbol);
+    setPaymentTokenEditInput(formatUnits(allowanceRaw, PAYMENT_ALLOWANCE_DECIMALS));
+    setPaymentTokenEditOnChainFee(null);
+    setPaymentTokenEditOnChainAllowance(allowanceRaw);
+    setPaymentTokenEditOpen(true);
+  };
+
+  const submitPaymentTokenEdit = () => {
+    if (!paymentTokenEditKind || !isAddress(paymentTokenEditToken)) return;
+    if (paymentTokenEditKind === "fee") {
+      const pct = Number(paymentTokenEditInput);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+        toast.error("Fee must be between 0% and 100%.");
+        return;
+      }
+      const feeRaw = BigInt(Math.round(pct * 100));
+      if (feeRaw > 10000n) {
+        toast.error("Fee cannot exceed 100%.");
+        return;
+      }
+      setPaymentTokenEditOpen(false);
+      setPaymentTokenEditKind(null);
+      queueVaultCall(
+        "Change Payment Token Fee",
+        `${paymentTokenEditSymbol}: ${formatDisplayNumber(pct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
+        "changeTokenFee",
+        [paymentTokenEditToken, feeRaw],
+        "Payment token fee updated",
+        `changeTokenFee(${paymentTokenEditToken}, ${feeRaw.toString()})`,
+      );
+      return;
+    }
+    let allowanceRaw: bigint;
+    try {
+      allowanceRaw = parseUnits(
+        paymentTokenEditInput.trim() || "0",
+        PAYMENT_ALLOWANCE_DECIMALS,
+      );
+    } catch {
+      toast.error("Allowance is invalid.");
+      return;
+    }
+    if (allowanceRaw <= 0n) {
+      toast.error("Allowance must be greater than zero (on-chain requirement).");
+      return;
+    }
+    setPaymentTokenEditOpen(false);
+    setPaymentTokenEditKind(null);
+    queueVaultCall(
+      "Change Payment Token Allowance",
+      `${paymentTokenEditSymbol}: ${formatUnits(allowanceRaw, PAYMENT_ALLOWANCE_DECIMALS)}${
+        showContractDevHints ? " (stored with 18 decimal places)" : ""
+      }`,
+      "changeTokenAllowance",
+      [paymentTokenEditToken, allowanceRaw],
+      "Payment token allowance updated",
+      `changeTokenAllowance(${paymentTokenEditToken}, ${allowanceRaw.toString()})`,
+    );
   };
 
   const openRateModal = (action: string, label: string) => {
+    setRateModalBaselineNav(CURRENT_NAV);
     setNewRate(CURRENT_NAV);
     setRateModalAction(action);
     setRateModalLabel(label);
@@ -285,41 +674,55 @@ export default function RedemptionPage() {
     functionName: NonNullable<typeof pendingVaultCall>["functionName"],
     args: readonly unknown[],
     successTitle: string,
+    contractNote?: string,
+    /** When false, contract note shows under Summary / New value instead of under Action. */
+    pinContractNoteUnderAction = true,
+    valueRows?: ConfirmModalValueRow[] | null,
   ) => {
     setPendingVaultCall({ functionName, args, successTitle });
-    openConfirm(action, newValue);
+    const hasRows = valueRows != null && valueRows.length > 0;
+    openConfirm(
+      action,
+      hasRows ? "" : newValue,
+      contractNote,
+      pinContractNoteUnderAction,
+      hasRows ? valueRows : null,
+    );
   };
 
   const handleSaveInstantSettings = () => {
-    const feePercent = Number(instantFeeInput);
-    if (!Number.isFinite(feePercent) || feePercent < 0) {
-      toast.error("Instant fee must be a valid non-negative percent.");
+    const parsed = parseInstantSettingsInputs(
+      instantFeeInput,
+      instantDailyLimitInput,
+      mTokenDecimals != null ? Number(mTokenDecimals) : undefined,
+    );
+    if (!parsed.ok) {
+      if (parsed.reason === "fee") {
+        toast.error("Instant fee must be a valid non-negative percent.");
+      } else if (parsed.reason === "daily_invalid") {
+        toast.error("Instant daily limit is invalid.");
+      } else {
+        toast.error("Instant daily limit must be non-negative.");
+      }
       return;
     }
-    const feeRaw = BigInt(Math.round(feePercent * 100));
-    let dailyLimit: bigint;
-    try {
-      dailyLimit = parseUnits(instantDailyLimitInput || "0", mTokenDecimals != null ? Number(mTokenDecimals) : 18);
-    } catch {
-      toast.error("Instant daily limit is invalid.");
-      return;
-    }
-    if (dailyLimit < 0n) {
-      toast.error("Instant daily limit must be non-negative.");
-      return;
-    }
+    const { feePercent, feeRaw, dailyLimit } = parsed;
     const steps: Array<{
       functionName: "setInstantFee" | "setInstantDailyLimit";
       args: readonly unknown[];
       successTitle: string;
-      summary: string;
+      human: string;
+      contractNote: string;
     }> = [];
     if (instantFee == null || feeRaw !== instantFee) {
       steps.push({
         functionName: "setInstantFee",
         args: [feeRaw],
         successTitle: "Instant fee updated",
-        summary: `New Instant Fee: ${feePercent.toFixed(2)}%\ncontract call: setInstantFee(${feeRaw.toString()})`,
+        human: `Instant fee: ${formatDisplayNumber(feePercent, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%${
+          showContractDevHints ? " (stored on-chain as percent × 100)" : ""
+        }`,
+        contractNote: `setInstantFee(${feeRaw.toString()})`,
       });
     }
     if (instantDailyLimit == null || dailyLimit !== instantDailyLimit) {
@@ -327,7 +730,10 @@ export default function RedemptionPage() {
         functionName: "setInstantDailyLimit",
         args: [dailyLimit],
         successTitle: "Instant daily limit updated",
-        summary: `New Instant Daily Limit: ${instantDailyLimitInput} ${mTokenSymbol ?? "mToken"}\ncontract call: setInstantDailyLimit(${dailyLimit.toString()})`,
+        human: `Instant daily limit: ${instantDailyLimitInput} ${mTokenSymbol ?? "mToken"}${
+          showContractDevHints ? ` (token ${mTokenDecimals ?? 18} decimals)` : ""
+        }`,
+        contractNote: `setInstantDailyLimit(${dailyLimit.toString()})`,
       });
     }
     if (steps.length === 0) {
@@ -335,7 +741,10 @@ export default function RedemptionPage() {
       return;
     }
     setPendingInstantSteps(steps);
-    openConfirm("Update Instant Settings (batched on-chain)", `${steps.length} transaction${steps.length > 1 ? "s" : ""}`);
+    openConfirm(
+      "Update instant redemption settings",
+      `${steps.length} transaction${steps.length > 1 ? "s" : ""}`,
+    );
   };
 
   const handleSaveVariationTolerance = () => {
@@ -347,10 +756,12 @@ export default function RedemptionPage() {
     const toleranceRaw = BigInt(Math.round(pct * 100));
     queueVaultCall(
       "Save Variation Tolerance",
-      `${pct.toFixed(2)}%`,
+      `Safe-approve tolerance: ${formatDisplayNumber(pct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`,
       "setVariationTolerance",
       [toleranceRaw],
       "Variation tolerance updated",
+      `setVariationTolerance(${toleranceRaw.toString()})`,
+      false,
     );
   };
 
@@ -366,7 +777,7 @@ export default function RedemptionPage() {
     }
     let allowanceRaw: bigint;
     try {
-      allowanceRaw = parseUnits(addTokenAllowanceInput || "0", 18);
+      allowanceRaw = parseUnits(addTokenAllowanceInput || "0", PAYMENT_ALLOWANCE_DECIMALS);
     } catch {
       toast.error("Allowance is invalid.");
       return;
@@ -374,35 +785,57 @@ export default function RedemptionPage() {
     const feeRaw = BigInt(Math.round(feePct * 100));
     queueVaultCall(
       "Add Payment Token",
-      shortAddr(addTokenAddress),
+      `Add token ${shortAddr(addTokenAddress)}, oracle ${shortAddr(addTokenDataFeed)}, fee ${formatDisplayNumber(feePct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%, allowance ${addTokenAllowanceInput}, stable: ${addTokenStable ? "yes" : "no"}`,
       "addPaymentToken",
       [addTokenAddress as `0x${string}`, addTokenDataFeed as `0x${string}`, feeRaw, allowanceRaw, addTokenStable],
       "Payment token added",
+      `addPaymentToken(${addTokenAddress}, ${addTokenDataFeed}, ${feeRaw.toString()}, ${allowanceRaw.toString()}, ${addTokenStable})`,
     );
   };
 
   const handleWithdrawToken = () => {
     if (!isAddress(withdrawTokenAddress) || !isAddress(withdrawToAddress)) {
-      toast.error("Token and Withdraw To must be valid addresses.");
+      toast.error("Select a payment token and enter a valid Recipient address.");
+      return;
+    }
+    if (withdrawTokenDecimals == null) {
+      toast.error("Token decimals not loaded yet; try again in a moment.");
       return;
     }
     let amountRaw: bigint;
     try {
-      amountRaw = parseUnits(withdrawAmountInput || "0", 18);
+      amountRaw = parseUnits(withdrawAmountInput || "0", withdrawTokenDecimals);
     } catch {
-      toast.error("Withdraw amount is invalid.");
+      toast.error("Withdraw amount is invalid for this token’s decimals.");
       return;
     }
     if (amountRaw <= 0n) {
       toast.error("Withdraw amount must be greater than 0.");
       return;
     }
+    if (
+      withdrawVaultTokenBalance !== undefined &&
+      amountRaw > withdrawVaultTokenBalance
+    ) {
+      toast.error("Amount exceeds this token’s balance in the redemption vault.");
+      return;
+    }
+    const sym =
+      paymentTokenRows.find((r) => r.token.toLowerCase() === withdrawTokenAddress.toLowerCase())?.symbol ??
+      shortAddr(withdrawTokenAddress);
+    const amountHuman = formatAmount(amountRaw, withdrawTokenDecimals, 6);
     queueVaultCall(
       "Withdraw Token",
-      `${shortAddr(withdrawTokenAddress)} → ${shortAddr(withdrawToAddress)}`,
+      "",
       "withdrawToken",
       [withdrawTokenAddress as `0x${string}`, amountRaw, withdrawToAddress as `0x${string}`],
       "Token withdrawn",
+      `withdrawToken(${withdrawTokenAddress}, ${amountRaw.toString()}, ${withdrawToAddress})`,
+      true,
+      [
+        { label: "Amount", value: `${amountHuman} ${sym}` },
+        { label: "Recipient", value: shortAddr(withdrawToAddress) },
+      ],
     );
   };
 
@@ -427,11 +860,35 @@ export default function RedemptionPage() {
     if (publicClient) {
       await publicClient.waitForTransactionReceipt({ hash });
     }
-    await Promise.all([refetchTokensReceiver(), refetchFeeReceiver(), refetchRequestRedeemer()]);
+    const refetchPaymentList =
+      pendingVaultCall.functionName === "addPaymentToken" ||
+      pendingVaultCall.functionName === "removePaymentToken"
+        ? refetchPaymentTokens()
+        : Promise.resolve();
+    const refetchPaymentConfigs =
+      pendingVaultCall.functionName === "changeTokenFee" ||
+      pendingVaultCall.functionName === "changeTokenAllowance"
+        ? refetchTokensConfigs()
+        : Promise.resolve();
+    const refetchWithdrawBalance =
+      pendingVaultCall.functionName === "withdrawToken" ? refetchWithdrawVaultTokenBalance() : Promise.resolve();
+    await Promise.all([
+      refetchTokensReceiver(),
+      refetchFeeReceiver(),
+      refetchRequestRedeemer(),
+      refetchVariationTolerance(),
+      refetchPaymentList,
+      refetchPaymentConfigs,
+      refetchWithdrawBalance,
+    ]);
     if (typeof chainId === "number") {
       toastChainTxSuccess(pendingVaultCall.successTitle, chainId, hash);
     } else {
       toast.success(pendingVaultCall.successTitle);
+    }
+    if (pendingVaultCall.functionName === "withdrawToken") {
+      setWithdrawAmountInput("");
+      setWithdrawToAddress("");
     }
     setPendingVaultCall(null);
     setPendingProgressMessage(undefined);
@@ -448,30 +905,39 @@ export default function RedemptionPage() {
     if (typeof chainId === "number" && walletChainId !== chainId) {
       throw new Error(`Switch wallet to chain ${chainId}.`);
     }
-    for (let i = 0; i < pendingInstantSteps.length; i += 1) {
-      const step = pendingInstantSteps[i];
-      setPendingProgressMessage(
-        `Signing transaction ${i + 1}/${pendingInstantSteps.length}: ${step.functionName}`,
-      );
-      const hash = await writeContractAsync({
-        address: vaultAddress as `0x${string}`,
-        abi: manageableVaultAbi,
-        functionName: step.functionName,
-        args: step.args,
-        chainId,
-      });
-      if (publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash });
+    const total = pendingInstantSteps.length;
+    try {
+      for (let i = 0; i < total; i += 1) {
+        const step = pendingInstantSteps[i];
+        const label =
+          step.functionName === "setInstantFee" ? "Instant fee" : "Instant daily limit";
+        if (total > 1) {
+          setInstantBatchProgress({ current: i + 1, total });
+          setPendingProgressMessage(
+            `Step ${i + 1} of ${total}: ${label} — sign in your wallet, then wait for confirmation.`,
+          );
+        }
+        const hash = await writeContractAsync({
+          address: vaultAddress as `0x${string}`,
+          abi: manageableVaultAbi,
+          functionName: step.functionName,
+          args: step.args,
+          chainId,
+        });
+        if (publicClient) {
+          await publicClient.waitForTransactionReceipt({ hash });
+        }
+        if (typeof chainId === "number") {
+          toastChainTxSuccess(step.successTitle, chainId, hash);
+        } else {
+          toast.success(step.successTitle);
+        }
       }
-      if (typeof chainId === "number") {
-        toastChainTxSuccess(step.successTitle, chainId, hash);
-      } else {
-        toast.success(step.successTitle);
-      }
+      await Promise.all([refetchInstantFee(), refetchInstantDailyLimit()]);
+    } finally {
+      setInstantBatchProgress(null);
+      setPendingProgressMessage(undefined);
     }
-    await Promise.all([refetchInstantFee(), refetchInstantDailyLimit()]);
-    setPendingInstantSteps([]);
-    setPendingProgressMessage(undefined);
   };
 
   return (
@@ -597,14 +1063,14 @@ export default function RedemptionPage() {
           <div className="flex items-center justify-between py-2 border-b border-border gap-4 flex-wrap">
             <div>
               <div className="text-xs text-muted-foreground">Redemption Vault</div>
-              <AddressWithActions addr={vaultAddress} chainId={chainId} />
+              <ManageableVaultAddressWithActions addr={vaultAddress} chainId={chainId} />
             </div>
           </div>
           {walletRows.map((w, i) => (
             <div key={i} className="flex items-center justify-between py-2 border-b border-border last:border-0 gap-4 flex-wrap">
               <div>
                 <div className="text-xs text-muted-foreground">{w.label}</div>
-                <AddressWithActions addr={w.addr} chainId={chainId} />
+                <ManageableVaultAddressWithActions addr={w.addr} chainId={chainId} />
               </div>
               <div className="flex items-center gap-3">
                 {w.addr ? (
@@ -628,7 +1094,7 @@ export default function RedemptionPage() {
             <div className="flex items-center justify-between py-2 gap-4 flex-wrap">
               <div>
                 <div className="text-xs text-muted-foreground">Redeemer Wallet</div>
-                <AddressWithActions addr={requestRedeemer ? String(requestRedeemer) : undefined} chainId={chainId} />
+                <ManageableVaultAddressWithActions addr={requestRedeemer ? String(requestRedeemer) : undefined} chainId={chainId} />
               </div>
               <div className="flex items-center gap-3">
                 {requestRedeemer ? (
@@ -664,7 +1130,21 @@ export default function RedemptionPage() {
               <Input value={instantDailyLimitInput} onChange={(e) => setInstantDailyLimitInput(e.target.value)} className="font-mono mt-1" />
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={handleSaveInstantSettings}>Save Instant Settings</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSaveInstantSettings}
+            disabled={
+              !vaultAddress ||
+              instantSettingsTxCount === null ||
+              instantSettingsTxCount === 0
+            }
+          >
+            Save Instant Settings
+            {instantSettingsTxCount != null && instantSettingsTxCount > 0
+              ? ` (${instantSettingsTxCount})`
+              : null}
+          </Button>
         </CardContent>
       </Card>
 
@@ -676,7 +1156,14 @@ export default function RedemptionPage() {
             <label className="text-xs text-muted-foreground">Safe Approval Tolerance (%)</label>
             <Input value={variationToleranceInput} onChange={(e) => setVariationToleranceInput(e.target.value)} className="font-mono mt-1 max-w-xs" />
           </div>
-          <Button variant="outline" size="sm" onClick={handleSaveVariationTolerance}>Save</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSaveVariationTolerance}
+            disabled={!variationToleranceCanSave}
+          >
+            Save
+          </Button>
         </CardContent>
       </Card>
 
@@ -701,20 +1188,109 @@ export default function RedemptionPage() {
               </tr>
             </thead>
             <tbody>
-              <tr className="border-b border-border/50">
-                <td className="py-2 font-mono">USDC</td>
-                <td className="py-2 font-mono">0xFeed1…</td>
-                <td className="py-2 font-mono text-right">0.10%</td>
-                <td className="py-2 font-mono text-right">500,000</td>
-                <td className="py-2 text-center text-yield-positive">Yes</td>
-                <td className="py-2 text-right">
-                  <div className="flex gap-1 justify-end">
-                    <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={() => openConfirm("Edit Fee")}>Edit Fee</Button>
-                    <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={() => openConfirm("Edit Allowance")}>Edit Allowance</Button>
-                    <Button size="sm" variant="ghost" className="text-xs h-6 px-2 text-destructive" onClick={() => openConfirm("Remove USDC")}>Remove</Button>
-                  </div>
-                </td>
-              </tr>
+              {!paymentVaultAddr ? (
+                <tr>
+                  <td colSpan={6} className="py-4 text-muted-foreground text-center">
+                    Select a vault with a redemption vault address to load payment tokens.
+                  </td>
+                </tr>
+              ) : paymentTokensListError ? (
+                <tr>
+                  <td colSpan={6} className="py-4 text-destructive text-center">
+                    Could not load payment tokens from the vault.
+                  </td>
+                </tr>
+              ) : paymentTokensTableLoading ? (
+                <tr>
+                  <td colSpan={6} className="py-4 text-muted-foreground text-center">
+                    Loading payment tokens…
+                  </td>
+                </tr>
+              ) : paymentTokenRows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-4 text-muted-foreground text-center">
+                    No payment tokens configured. Add one below.
+                  </td>
+                </tr>
+              ) : (
+                paymentTokenRows.map(({ token, symbol, cfg }) => (
+                  <tr key={token} className="border-b border-border/50">
+                    <td className="py-2 font-mono" title={token}>
+                      {symbol}
+                    </td>
+                    <td className="py-2">
+                      {cfg ? (
+                        <ManageableVaultAddressWithActions addr={cfg.dataFeed} chainId={chainId} />
+                      ) : (
+                        <span className="font-mono text-sm text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="py-2 font-mono text-right">
+                      {cfg ? formatFeePercent(cfg.fee) : "—"}
+                    </td>
+                    <td
+                      className="py-2 font-mono text-right max-w-[11rem] truncate align-middle"
+                      title={
+                        cfg
+                          ? formatUnits(cfg.allowance, PAYMENT_ALLOWANCE_DECIMALS)
+                          : undefined
+                      }
+                    >
+                      {cfg ? formatPaymentAllowanceDisplay(cfg.allowance) : "—"}
+                    </td>
+                    <td className="py-2 text-center">
+                      {cfg ? (
+                        <span className={cfg.stable ? "text-yield-positive" : "text-muted-foreground"}>
+                          {cfg.stable ? "Yes" : "No"}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="py-2 text-right">
+                      <div className="flex gap-1 justify-end flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs h-6 px-2"
+                          disabled={!cfg}
+                          onClick={() => cfg && openEditPaymentTokenFee(token, symbol, cfg.fee)}
+                        >
+                          Edit Fee
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs h-6 px-2"
+                          disabled={!cfg}
+                          onClick={() =>
+                            cfg && openEditPaymentTokenAllowance(token, symbol, cfg.allowance)
+                          }
+                        >
+                          Edit Allowance
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs h-6 px-2 text-destructive"
+                          onClick={() =>
+                            queueVaultCall(
+                              "Remove Payment Token",
+                              `${symbol} (${shortAddr(token)})`,
+                              "removePaymentToken",
+                              [token],
+                              "Payment token removed",
+                              `removePaymentToken(${token})`,
+                            )
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
           {showAddToken && (
@@ -729,7 +1305,9 @@ export default function RedemptionPage() {
                 <Switch checked={addTokenStable} onCheckedChange={(v) => setAddTokenStable(Boolean(v))} />
                 <span className="text-xs text-muted-foreground">Stable</span>
               </div>
-              <Button size="sm" onClick={handleAddPaymentToken}>Add</Button>
+              <Button size="sm" onClick={handleAddPaymentToken} disabled={!addPaymentTokenCanSubmit}>
+                Add
+              </Button>
             </div>
           )}
         </CardContent>
@@ -742,12 +1320,91 @@ export default function RedemptionPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">Token</label>
-              <Input value={withdrawTokenAddress} onChange={(e) => setWithdrawTokenAddress(e.target.value)} className="font-mono mt-1" placeholder="0x token..." />
+              <Select
+                value={withdrawTokenAddress || undefined}
+                onValueChange={(v) => setWithdrawTokenAddress(v)}
+                disabled={
+                  !paymentVaultAddr ||
+                  paymentTokensTableLoading ||
+                  paymentTokenRows.length === 0
+                }
+              >
+                <SelectTrigger className="font-mono mt-1 w-full">
+                  <SelectValue placeholder="Select payment token" />
+                </SelectTrigger>
+                <SelectContent>
+                  {paymentTokenRows.map(({ token, symbol }) => (
+                    <SelectItem key={token} value={token} className="font-mono">
+                      {symbol} · {shortAddr(token)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!paymentVaultAddr ? (
+                <p className="text-xs text-muted-foreground mt-1">Load a vault to list payment tokens.</p>
+              ) : paymentTokensListError ? (
+                <p className="text-xs text-destructive mt-1">Could not load payment tokens.</p>
+              ) : !paymentTokensTableLoading && paymentTokenRows.length === 0 ? (
+                <p className="text-xs text-muted-foreground mt-1">No payment tokens — add one above first.</p>
+              ) : null}
             </div>
-            <div><label className="text-xs text-muted-foreground">Amount</label><Input value={withdrawAmountInput} onChange={(e) => setWithdrawAmountInput(e.target.value)} className="font-mono mt-1" placeholder="0" /></div>
-            <div><label className="text-xs text-muted-foreground">Withdraw To</label><Input value={withdrawToAddress} onChange={(e) => setWithdrawToAddress(e.target.value)} className="font-mono mt-1" placeholder="0x..." /></div>
+            <div>
+              <label className="text-xs text-muted-foreground">Amount</label>
+              <Input
+                value={withdrawAmountInput}
+                onChange={(e) => setWithdrawAmountInput(e.target.value)}
+                className={cn(
+                  "font-mono mt-1",
+                  withdrawAmountExceedsVaultBalance && "border-destructive focus-visible:ring-destructive/40",
+                )}
+                placeholder="0"
+              />
+              <div className="flex flex-wrap justify-end items-baseline gap-x-2 gap-y-0.5 mt-1 text-right">
+                {withdrawVaultBalanceEnabled && withdrawVaultTokenBalanceError ? (
+                  <span className="text-xs text-destructive">Could not load vault balance.</span>
+                ) : withdrawVaultBalanceEnabled && withdrawVaultTokenBalanceLoading ? (
+                  <span className="text-xs text-muted-foreground">Loading vault balance…</span>
+                ) : withdrawVaultBalanceReady && withdrawTokenDecimals != null ? (
+                  <>
+                    <span className="text-xs text-muted-foreground">
+                      Max Withdrawable:{" "}
+                      {formatAmount(withdrawVaultTokenBalance, withdrawTokenDecimals, 8)}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary hover:underline disabled:opacity-40 disabled:no-underline"
+                      disabled={withdrawVaultTokenBalance === 0n}
+                      onClick={() => {
+                        if (withdrawVaultTokenBalance === undefined || withdrawTokenDecimals == null) return;
+                        setWithdrawAmountInput(
+                          formatUnits(withdrawVaultTokenBalance, withdrawTokenDecimals),
+                        );
+                      }}
+                    >
+                      Max
+                    </button>
+                  </>
+                ) : null}
+              </div>
+              {withdrawAmountExceedsVaultBalance ? (
+                <p className="text-xs text-destructive mt-1 text-right">
+                  Amount exceeds balance in the redemption vault.
+                </p>
+              ) : null}
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Recipient</label>
+              <Input
+                value={withdrawToAddress}
+                onChange={(e) => setWithdrawToAddress(e.target.value)}
+                className="font-mono mt-1"
+                placeholder="0x..."
+              />
+            </div>
           </div>
-          <Button variant="outline" onClick={handleWithdrawToken}>Withdraw</Button>
+          <Button variant="outline" onClick={handleWithdrawToken} disabled={!withdrawTokenCanSubmit}>
+            Withdraw
+          </Button>
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <AlertTriangle className="h-3 w-3 text-accent" />
             This will transfer assets directly out of the contract. Confirm before proceeding.
@@ -770,7 +1427,9 @@ export default function RedemptionPage() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setRateModalOpen(false)}>Cancel</Button>
-            <Button onClick={submitRateModal}>Submit</Button>
+            <Button onClick={submitRateModal} disabled={!rateModalCanSubmit}>
+              Submit
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -797,7 +1456,68 @@ export default function RedemptionPage() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setWalletEditOpen(false)}>Cancel</Button>
-            <Button onClick={submitWalletEdit}>Continue</Button>
+            <Button onClick={submitWalletEdit} disabled={!walletEditCanContinue}>
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={paymentTokenEditOpen}
+        onOpenChange={(open) => {
+          setPaymentTokenEditOpen(open);
+          if (!open) {
+            setPaymentTokenEditKind(null);
+            setPaymentTokenEditToken("");
+            setPaymentTokenEditSymbol("");
+            setPaymentTokenEditInput("");
+            setPaymentTokenEditOnChainFee(null);
+            setPaymentTokenEditOnChainAllowance(null);
+          }
+        }}
+      >
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="font-display">
+              {paymentTokenEditKind === "fee"
+                ? "Edit payment token fee"
+                : paymentTokenEditKind === "allowance"
+                  ? "Edit payment token allowance"
+                  : "Edit payment token"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground font-mono">
+            {paymentTokenEditSymbol}
+            {isAddress(paymentTokenEditToken) ? ` · ${paymentTokenEditToken}` : null}
+          </p>
+          <div className="space-y-2">
+            <label className="text-xs text-muted-foreground">
+              {paymentTokenEditKind === "fee"
+                ? "Fee (%)"
+                : paymentTokenEditKind === "allowance"
+                  ? "Allowance (18-decimal amount)"
+                  : "Value"}
+            </label>
+            <Input
+              value={paymentTokenEditInput}
+              onChange={(e) => setPaymentTokenEditInput(e.target.value)}
+              className="font-mono"
+              placeholder={paymentTokenEditKind === "fee" ? "0.10" : "500000"}
+            />
+            {paymentTokenEditKind === "allowance" ? (
+              <p className="text-xs text-muted-foreground">
+                Must be &gt; 0. Parsed with the same 18-decimal rules as &quot;Add Payment Token&quot;.
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPaymentTokenEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitPaymentTokenEdit} disabled={!paymentTokenEditCanContinue}>
+              Continue
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -810,11 +1530,32 @@ export default function RedemptionPage() {
             setPendingVaultCall(null);
             setPendingInstantSteps([]);
             setPendingProgressMessage(undefined);
+            setInstantBatchProgress(null);
+            setConfirmContractNote("");
+            setConfirmActionContractNote("");
+            setConfirmValueRows(null);
           }
         }}
         action={confirmAction}
+        actionContractNote={confirmActionContractNote || undefined}
         newValue={confirmValue}
-        summaryLines={pendingInstantSteps.length ? pendingInstantSteps.map((s) => s.summary) : undefined}
+        newValueSecondary={confirmContractNote || undefined}
+        newValueLabel={
+          pendingInstantSteps.length
+            ? "Batch"
+            : confirmContractNote || confirmActionContractNote
+              ? "Summary"
+              : "New Value"
+        }
+        valueRows={confirmValueRows ?? undefined}
+        summaryRows={
+          pendingInstantSteps.length
+            ? pendingInstantSteps.map((s) => ({
+                human: s.human,
+                contractNote: s.contractNote,
+              }))
+            : undefined
+        }
         contractAddress={vaultAddress}
         walletAddress={walletAddress}
         walletFallback={isConnected ? "Connected wallet unavailable" : "Not connected"}
@@ -830,6 +1571,7 @@ export default function RedemptionPage() {
           pendingProgressMessage ??
           "Submit in your wallet and wait for the transaction to be mined."
         }
+        batchProgress={instantBatchProgress}
       />
     </div>
   );

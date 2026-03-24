@@ -16,4 +16,11 @@ export const depositVaultAbi = [
     inputs: [],
     outputs: [{ type: "uint256", name: "" }],
   },
+  {
+    type: "function",
+    name: "setMaxSupplyCap",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "newCap" }],
+    outputs: [],
+  },
 ] as const;

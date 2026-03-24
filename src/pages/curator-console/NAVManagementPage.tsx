@@ -6,13 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, AlertTriangle, Copy, ExternalLink } from "lucide-react";
-import { ConfirmActionModal } from "@/components/curator-console/ConfirmActionModal";
+import { ConfirmActionModal, type ConfirmSummaryRow } from "@/components/curator-console/ConfirmActionModal";
 import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
 import { useVaultDetailQuery } from "@/hooks/queries/useVaultDetailQuery";
 import { useNavHistoryQuery } from "@/hooks/queries/useNavHistoryQuery";
 import { navSnapshotsToChartData, parseDecimal } from "@/domain/vaults/mappers";
 import type { NavPeriod } from "@/services/api/vaultsApi";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   useAccount,
   useChainId,
@@ -34,6 +43,8 @@ import { planMinMaxAnswerTxs } from "@/lib/dataFeedTxPlan";
 import { toastChainTxSuccess } from "@/lib/toastChainTx";
 import { useWalletChainGate } from "@/hooks/useWalletChainGate";
 import { WalletChainGateOrActions } from "@/components/wallet/WalletChainGateOrActions";
+import { showConfirmModalContractDetails } from "@/lib/confirm-modal-env";
+import { formatBigIntIntegerForDisplay, formatDisplayNumber } from "@/lib/formatNumbers";
 
 const EMPTY_FEED = { healthyDiffSeconds: "", minPriceHuman: "", maxPriceHuman: "" };
 
@@ -48,10 +59,10 @@ function trimDecimalZeros(s: string): string {
   return t.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
 }
 
-/** Format a number with at most `maxFrac` fraction digits, no trailing zeros. */
+/** Format a number with at most `maxFrac` fraction digits (Western grouping). */
 function formatNavPrice(n: number, maxFrac = 6): string {
   if (!Number.isFinite(n)) return String(n);
-  return trimDecimalZeros(n.toFixed(maxFrac));
+  return formatDisplayNumber(n, { minimumFractionDigits: 0, maximumFractionDigits: maxFrac });
 }
 
 function parseManageableVaultAddr(raw: string | undefined): Address | undefined {
@@ -65,14 +76,35 @@ type PlannedFeedStep =
   | { functionName: "setMinExpectedAnswer"; value: bigint }
   | { functionName: "setMaxExpectedAnswer"; value: bigint };
 
-function describeFeedStep(s: PlannedFeedStep): string {
+const FEED_STEP_SIGNING_LABELS: Record<PlannedFeedStep["functionName"], string> = {
+  setHealthyDiff: "Staleness limit",
+  setMinExpectedAnswer: "Min. NAV price",
+  setMaxExpectedAnswer: "Max. NAV price",
+};
+
+function plannedFeedStepToSummaryRow(s: PlannedFeedStep, aggregatorDecimals: number): ConfirmSummaryRow {
   if (s.functionName === "setHealthyDiff") {
-    return `setHealthyDiff(${s.value.toString()} seconds)`;
+    const sec = s.value;
+    const secNum = Number(sec);
+    const hours = Number.isFinite(secNum) ? secNum / 3600 : null;
+    const secGrouped = formatBigIntIntegerForDisplay(sec);
+    const human =
+      hours != null && hours >= 1
+        ? `Staleness Limit: ${secGrouped} seconds (~${formatDisplayNumber(Math.round(hours), { maximumFractionDigits: 0 })}h)`
+        : `Staleness Limit: ${secGrouped} seconds`;
+    return { human, contractNote: `setHealthyDiff(${sec.toString()})` };
   }
+  const priceHuman = formatNavPrice(parseDecimal(formatUnits(s.value, aggregatorDecimals)), 8);
   if (s.functionName === "setMinExpectedAnswer") {
-    return `setMinExpectedAnswer(${s.value.toString()})`;
+    return {
+      human: `Min. NAV Price: ${priceHuman}`,
+      contractNote: `setMinExpectedAnswer(${s.value.toString()})`,
+    };
   }
-  return `setMaxExpectedAnswer(${s.value.toString()})`;
+  return {
+    human: `Max. NAV Price: ${priceHuman}`,
+    contractNote: `setMaxExpectedAnswer(${s.value.toString()})`,
+  };
 }
 
 function OnChainAddressRow({
@@ -184,16 +216,20 @@ export default function NAVManagementPage() {
   const [confirmKind, setConfirmKind] = useState<"nav" | "feed">("nav");
   const [confirmAction, setConfirmAction] = useState("");
   const [confirmValue, setConfirmValue] = useState("");
-  const [confirmNavContractLine, setConfirmNavContractLine] = useState<string | undefined>(undefined);
-  const [feedSummaryLines, setFeedSummaryLines] = useState<string[]>([]);
+  /** NAV confirm only: dev footnote under Action (function + args). */
+  const [confirmActionContractNote, setConfirmActionContractNote] = useState<string | undefined>(undefined);
+  const [feedSummaryRows, setFeedSummaryRows] = useState<ConfirmSummaryRow[]>([]);
   const [plannedFeedSteps, setPlannedFeedSteps] = useState<PlannedFeedStep[]>([]);
   const [navSubmitKind, setNavSubmitKind] = useState<"safe" | "force" | null>(null);
   const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
   const [chainNavSnapshot, setChainNavSnapshot] = useState<ChainNavSnapshot | null>(null);
   const [onChainNavLoading, setOnChainNavLoading] = useState(false);
   const [localNavTxLog, setLocalNavTxLog] = useState<NavHistoryRow[]>([]);
+  /** Multi-step DataFeed confirm: current/total for modal progress UI. */
+  const [feedBatchProgress, setFeedBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
   const chainSupported = typeof chainId === "number" && supportedWagmiChainIds.has(chainId);
+  const showContractDevHints = showConfirmModalContractDetails();
 
   const period: NavPeriod = timeRange === "7d" ? "7d" : timeRange === "90d" ? "90d" : "30d";
 
@@ -232,16 +268,16 @@ export default function NAVManagementPage() {
     },
   });
 
-  const { dataFeedAddress, dataFeedSource } = useMemo(() => {
+  const { dataFeedAddress } = useMemo(() => {
     const d = depositFeedRead.data;
     const r = redeemFeedRead.data;
     if (d && d !== zeroAddress) {
-      return { dataFeedAddress: d as Address, dataFeedSource: "deposit" as const };
+      return { dataFeedAddress: d as Address };
     }
     if (r && r !== zeroAddress) {
-      return { dataFeedAddress: r as Address, dataFeedSource: "redemption" as const };
+      return { dataFeedAddress: r as Address };
     }
-    return { dataFeedAddress: undefined, dataFeedSource: undefined };
+    return { dataFeedAddress: undefined };
   }, [depositFeedRead.data, redeemFeedRead.data]);
 
   const canLookupFeedFromVaults =
@@ -340,6 +376,30 @@ export default function NAVManagementPage() {
     chainId,
     query: { enabled: Boolean(agg && chainSupported) },
   });
+
+  /** CustomAggregatorV3CompatibleFeed — max |Δprice| % allowed for setRoundDataSafe (scaled × 10^8). */
+  const {
+    data: maxAnswerDeviation,
+    isLoading: maxAnswerDeviationLoading,
+    isError: maxAnswerDeviationReadError,
+  } = useReadContract({
+    address: agg,
+    abi: customAggregatorV3CompatibleFeedAbi,
+    functionName: "maxAnswerDeviation",
+    chainId,
+    query: { enabled: Boolean(agg && chainSupported) },
+  });
+
+  const maxAnswerDeviationPercentDisplay = useMemo(() => {
+    if (maxAnswerDeviation == null) return null;
+    try {
+      const n = parseFloat(formatUnits(maxAnswerDeviation, 8));
+      if (!Number.isFinite(n)) return null;
+      return `${formatDisplayNumber(n, { minimumFractionDigits: 0, maximumFractionDigits: 6 })}%`;
+    } catch {
+      return null;
+    }
+  }, [maxAnswerDeviation]);
 
   const {
     data: navSnapshots,
@@ -534,6 +594,43 @@ export default function NAVManagementPage() {
     }
   }, [aggregatorDecimals, newNav]);
 
+  /** True when parsed NAV matches on-chain latest answer or displayed NAV (no submit needed). */
+  const navSubmitValueUnchanged = useMemo(() => {
+    if (aggregatorDecimals == null || !newNav.trim()) return true;
+    let dataInt: bigint;
+    try {
+      dataInt = parseUnits(newNav.trim(), aggregatorDecimals);
+    } catch {
+      return true;
+    }
+    if (dataInt <= 0n) return true;
+    if (chainNavSnapshot?.answerRaw != null) {
+      try {
+        return dataInt === BigInt(chainNavSnapshot.answerRaw);
+      } catch {
+        /* compare fallthrough */
+      }
+    }
+    if (displayNav > 0) {
+      const parsed = parseFloat(newNav.trim());
+      if (!Number.isFinite(parsed)) return true;
+      return Math.abs(parsed - displayNav) < 1e-12;
+    }
+    return false;
+  }, [aggregatorDecimals, newNav, chainNavSnapshot?.answerRaw, displayNav]);
+
+  const navChangeExceedsMaxDeviation = useMemo(() => {
+    if (maxAnswerDeviation == null) return false;
+    if (!Number.isFinite(changePct)) return false;
+    try {
+      const maxPct = parseFloat(formatUnits(maxAnswerDeviation, 8));
+      if (!Number.isFinite(maxPct)) return false;
+      return Math.abs(changePct) > maxPct;
+    } catch {
+      return false;
+    }
+  }, [maxAnswerDeviation, changePct]);
+
   const openNavConfirm = async (kind: "safe" | "force") => {
     if (!agg) {
       toast.error("Aggregator address not available — check DataFeed.");
@@ -557,14 +654,19 @@ export default function NAVManagementPage() {
 
     const navHuman = trimDecimalZeros(newNav.trim());
 
+    const contractFn = kind === "safe" ? "setRoundDataSafe" : "setRoundData";
     setNavSubmitKind(kind);
     setConfirmKind("nav");
-    setConfirmAction(kind === "safe" ? "setRoundDataSafe" : "setRoundData");
-    setConfirmValue(navHuman);
-    setConfirmNavContractLine(
-      `Contract call: ${dataInt.toString()} (int256 _data, ${aggregatorDecimals} decimals)`,
+    setConfirmAction(
+      kind === "safe"
+        ? "Submit NAV update (with variation checking)"
+        : "Submit NAV update (bypass variation checking)",
     );
-    setFeedSummaryLines([]);
+    setConfirmValue(navHuman);
+    setConfirmActionContractNote(
+      `${contractFn}(${dataInt.toString()}) — int256 _data, ${aggregatorDecimals} decimals`,
+    );
+    setFeedSummaryRows([]);
     setPlannedFeedSteps([]);
     setConfirmOpen(true);
   };
@@ -684,29 +786,38 @@ export default function NAVManagementPage() {
       setMaxExpectedAnswer: "Max expected answer updated",
     };
 
-    for (const step of plannedFeedSteps) {
-      const hash = await writeContractAsync({
-        address: dataFeedAddress,
-        abi: dataFeedAbi,
-        functionName: step.functionName,
-        args: [step.value],
-        chainId,
-      });
-      if (publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash });
+    const total = plannedFeedSteps.length;
+    try {
+      for (let i = 0; i < total; i += 1) {
+        const step = plannedFeedSteps[i];
+        if (total > 1) {
+          setFeedBatchProgress({ current: i + 1, total });
+        }
+        const hash = await writeContractAsync({
+          address: dataFeedAddress,
+          abi: dataFeedAbi,
+          functionName: step.functionName,
+          args: [step.value],
+          chainId,
+        });
+        if (publicClient) {
+          await publicClient.waitForTransactionReceipt({ hash });
+        }
+        if (typeof chainId === "number") {
+          toastChainTxSuccess(stepTitles[step.functionName], chainId, hash);
+        }
       }
-      if (typeof chainId === "number") {
-        toastChainTxSuccess(stepTitles[step.functionName], chainId, hash);
-      }
-    }
 
-    await refetchFeedReads();
-    const nextSaved = {
-      healthyDiffSeconds,
-      minPriceHuman,
-      maxPriceHuman,
-    };
-    setSavedFeed(nextSaved);
+      await refetchFeedReads();
+      const nextSaved = {
+        healthyDiffSeconds,
+        minPriceHuman,
+        maxPriceHuman,
+      };
+      setSavedFeed(nextSaved);
+    } finally {
+      setFeedBatchProgress(null);
+    }
   }, [
     chainId,
     chainSupported,
@@ -783,9 +894,10 @@ export default function NAVManagementPage() {
     }
 
     setPlannedFeedSteps(steps);
-    setFeedSummaryLines(steps.map(describeFeedStep));
+    setFeedSummaryRows(steps.map((step) => plannedFeedStepToSummaryRow(step, aggregatorDecimals)));
+    setConfirmActionContractNote(undefined);
     setConfirmKind("feed");
-    setConfirmAction("Update DataFeed (batched on-chain)");
+    setConfirmAction("Update oracle feed settings");
     setConfirmValue(`${steps.length} transaction${steps.length > 1 ? "s" : ""}`);
     setConfirmOpen(true);
   };
@@ -794,12 +906,22 @@ export default function NAVManagementPage() {
     setConfirmOpen(open);
     if (!open) {
       setPlannedFeedSteps([]);
-      setFeedSummaryLines([]);
+      setFeedSummaryRows([]);
       setNavSubmitKind(null);
-      setConfirmNavContractLine(undefined);
+      setConfirmActionContractNote(undefined);
+      setFeedBatchProgress(null);
       setConfirmKind("nav");
     }
   };
+
+  const feedConfirmPendingMessage = useMemo(() => {
+    if (feedBatchProgress != null && feedBatchProgress.total > 1) {
+      const step = plannedFeedSteps[feedBatchProgress.current - 1];
+      const label = step ? FEED_STEP_SIGNING_LABELS[step.functionName] : "This step";
+      return `Step ${feedBatchProgress.current} of ${feedBatchProgress.total}: ${label} — sign in your wallet, then wait for confirmation.`;
+    }
+    return "Submit each step in your wallet. Multiple transactions may be required.";
+  }, [feedBatchProgress, plannedFeedSteps]);
 
   const feedChanged =
     healthyDiffSeconds !== savedFeed.healthyDiffSeconds ||
@@ -878,17 +1000,32 @@ export default function NAVManagementPage() {
             {navCardLoading && displayNav <= 0 ? (
               <div className="text-sm text-muted-foreground font-mono">Loading NAV…</div>
             ) : onChainNavLoading && displayNav <= 0 && currentNav <= 0 ? (
-              <div className="text-sm text-muted-foreground font-mono">Reading on-chain latestRoundData…</div>
+              <div className="text-sm text-muted-foreground font-mono">Reading on-chain NAV…</div>
             ) : displayNav > 0 ? (
               <div className="text-3xl font-mono font-bold text-foreground">
                 ${formatNavPrice(displayNav, 6)}{" "}
                 <span className="text-base text-muted-foreground font-normal">
                   USD per {mTokenSymbol ?? "mToken"}
                 </span>
-                {chainNavSnapshot ? (
+                {vaultDetail != null && Number.isFinite(vaultDetail.navChange24h) ? (
+                  <span
+                    className={`ml-2 inline-flex items-center rounded-md px-2 py-0.5 align-middle text-xs font-medium ${
+                      vaultDetail.navChange24h >= 0
+                        ? "bg-yield-positive/10 text-yield-positive"
+                        : "bg-destructive/10 text-destructive"
+                    }`}
+                  >
+                    24h {vaultDetail.navChange24h >= 0 ? "+" : ""}
+                    {formatDisplayNumber(vaultDetail.navChange24h, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 3,
+                    })}
+                    %
+                  </span>
+                ) : null}
+                {chainNavSnapshot && chainNavSnapshot.txHash ? (
                   <span className="block text-[10px] font-normal text-muted-foreground mt-1 normal-case">
-                    Source: aggregator <span className="font-mono">latestRoundData</span>
-                    {chainNavSnapshot.txHash ? " (this session)" : ""}
+                    Updated in this session
                   </span>
                 ) : null}
               </div>
@@ -914,21 +1051,6 @@ export default function NAVManagementPage() {
                 <span className="text-accent">Update recommended (&gt;12h since last snapshot in range)</span>
               </div>
             ) : null}
-            <div className="flex gap-4 text-xs text-muted-foreground font-mono">
-              <span>
-                Feed staleness (healthyDiff):{" "}
-                {onChainHealthyDiff != null
-                  ? `${(Number(onChainHealthyDiff) / 3600).toFixed(1)}h on-chain`
-                  : "—"}
-              </span>
-              {vaultDetail != null && Number.isFinite(vaultDetail.navChange24h) ? (
-                <span className={vaultDetail.navChange24h >= 0 ? "text-yield-positive" : "text-destructive"}>
-                  API 24h: {vaultDetail.navChange24h >= 0 ? "+" : ""}
-                  {vaultDetail.navChange24h.toFixed(3)}%
-                </span>
-              ) : null}
-            </div>
-
             <div className="space-y-2 pt-2">
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 On-chain NAV source
@@ -936,14 +1058,12 @@ export default function NAVManagementPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <OnChainAddressRow
                   label="DataFeed (mTokenDataFeed)"
-                  description={dataFeedSource ? `Resolved via ${dataFeedSource === "deposit" ? "deposit" : "redemption"} vault` : "Oracle wrapper used by the vault"}
                   address={dataFeedAddress}
                   placeholder={dataFeedRowPlaceholder}
                   explorerChainId={explorerChainId}
                 />
                 <OnChainAddressRow
                   label="Aggregator (price feed)"
-                  description="Aggregator used by the vault price feed."
                   address={agg ? String(agg) : undefined}
                   placeholder={aggregatorRowPlaceholder}
                   explorerChainId={explorerChainId}
@@ -960,21 +1080,75 @@ export default function NAVManagementPage() {
           <div className="border-t border-border" />
 
           <div className="space-y-3">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Update NAV</div>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Update NAV
+              </span>
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="text-[11px] text-muted-foreground cursor-help underline decoration-dotted decoration-border underline-offset-2 hover:text-foreground border-0 bg-transparent p-0 text-left font-sans shrink-0"
+                    >
+                      Max NAV deviation:{" "}
+                      <span className="font-mono text-foreground tabular-nums">
+                        {maxAnswerDeviationLoading
+                          ? "…"
+                          : maxAnswerDeviationReadError || maxAnswerDeviationPercentDisplay == null
+                            ? "—"
+                            : maxAnswerDeviationPercentDisplay}
+                      </span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-sm text-xs leading-relaxed">
+                    {maxAnswerDeviationLoading ? (
+                      <p className="m-0">Loading this limit from the price feed…</p>
+                    ) : maxAnswerDeviationReadError || maxAnswerDeviationPercentDisplay == null ? (
+                      <p className="m-0">
+                        We couldn&apos;t read this limit. The address may not be a manual TermMax-style price feed, or
+                        the network request failed. You can still try <strong>Submit update</strong> or{" "}
+                        <strong>Force submit</strong>; if the feed doesn&apos;t support this check, behavior depends on
+                        the contract.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="m-0">
+                          With <strong>Submit update</strong>, the new NAV can only move this much compared to the last
+                          NAV already stored on chain. If you go further, the transaction will be rejected.
+                        </p>
+                        <p className="m-0">
+                          Use <strong>Force submit</strong> when you intentionally need a larger step. The feed may
+                          still block values outside its own lowest and highest allowed prices.
+                        </p>
+                      </div>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <div>
-              <label className="text-xs text-muted-foreground">New NAV (USD, 6 decimal places)</label>
+              <label className="text-xs text-muted-foreground">
+                New NAV (USD, {aggregatorDecimals ?? "…"} decimal places)
+              </label>
               <Input value={newNav} onChange={(e) => setNewNav(e.target.value)} className="font-mono mt-1 h-9" />
             </div>
             <div className="text-xs font-mono text-muted-foreground">
               Change: {changePct >= 0 ? "+" : ""}
-              {changePct.toFixed(3)}%
+              {formatDisplayNumber(changePct, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}%
             </div>
             <WalletChainGateOrActions gate={gate}>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2 w-full">
                 <Button
                   size="sm"
                   className="sm:flex-1 h-8 text-xs"
-                  disabled={!agg || aggregatorDecimals == null || !navHumanParseOk}
+                  disabled={
+                    !agg ||
+                    aggregatorDecimals == null ||
+                    !navHumanParseOk ||
+                    navSubmitValueUnchanged ||
+                    navChangeExceedsMaxDeviation
+                  }
                   onClick={() => void openNavConfirm("safe")}
                 >
                   Submit update
@@ -983,7 +1157,12 @@ export default function NAVManagementPage() {
                   size="sm"
                   variant="destructive"
                   className="sm:flex-1 h-8 text-xs"
-                  disabled={!agg || aggregatorDecimals == null || !navHumanParseOk}
+                  disabled={
+                    !agg ||
+                    aggregatorDecimals == null ||
+                    !navHumanParseOk ||
+                    navSubmitValueUnchanged
+                  }
                   onClick={() => void openNavConfirm("force")}
                   title="Force submit NAV update"
                 >
@@ -991,9 +1170,11 @@ export default function NAVManagementPage() {
                 </Button>
               </div>
             </WalletChainGateOrActions>
-            <p className="text-[10px] text-muted-foreground leading-snug">
-              Submits NAV to the vault price feed using its configured decimals.
-            </p>
+            {navChangeExceedsMaxDeviation ? (
+              <p className="text-[10px] text-destructive leading-snug">
+                New NAV exceeds Max NAV deviation. Use Force submit if this larger move is intentional.
+              </p>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -1018,9 +1199,7 @@ export default function NAVManagementPage() {
         </CardHeader>
         <CardContent>
           {navError && chartData.length > 0 ? (
-            <p className="text-[10px] text-muted-foreground mb-2">
-              API history failed; chart may include on-chain <span className="font-mono">latestRoundData</span> only.
-            </p>
+            <p className="text-[10px] text-muted-foreground mb-2">API history failed; showing available on-chain NAV.</p>
           ) : null}
           {navError && chartData.length === 0 ? (
             <p className="text-xs text-destructive py-6">Could not load NAV history from API.</p>
@@ -1045,7 +1224,7 @@ export default function NAVManagementPage() {
                     tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }}
                     tickFormatter={(v: number) => formatNavPrice(v, 6)}
                   />
-                  <Tooltip
+                  <RechartsTooltip
                     contentStyle={{
                       background: "hsl(220, 18%, 10%)",
                       border: "1px solid hsl(220, 15%, 16%)",
@@ -1107,7 +1286,9 @@ export default function NAVManagementPage() {
                               : "text-destructive"
                         }`}
                       >
-                        {row.changePct == null ? "—" : `${row.changePct >= 0 ? "+" : ""}${row.changePct.toFixed(3)}%`}
+                        {row.changePct == null
+                          ? "—"
+                          : `${row.changePct >= 0 ? "+" : ""}${formatDisplayNumber(row.changePct, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}%`}
                       </td>
                       <td className="py-2 font-mono text-right">
                         {row.txHash && explorerChainId != null ? (
@@ -1135,9 +1316,6 @@ export default function NAVManagementPage() {
                 this session).
               </p>
             ) : null}
-            <p className="text-[10px] text-muted-foreground mt-2">
-              Rows from your wallet include a tx link. API snapshots omit updater until indexed.
-            </p>
           </div>
         </CardContent>
       </Card>
@@ -1168,33 +1346,7 @@ export default function NAVManagementPage() {
                   API vault detail has no valid depositVaultAddress / redemptionVaultAddress — cannot locate DataFeed.
                 </p>
               ) : null}
-              {dataFeedAddress ? (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <OnChainAddressRow
-                      label="DataFeed contract"
-                      description={
-                        dataFeedSource
-                          ? `Via ${dataFeedSource === "deposit" ? "deposit" : "redemption"} vault`
-                          : undefined
-                      }
-                      address={dataFeedAddress}
-                      explorerChainId={explorerChainId}
-                    />
-                    <OnChainAddressRow
-                      label="Aggregator (growth feed)"
-                      address={agg ? String(agg) : undefined}
-                      placeholder={aggregatorRowPlaceholder}
-                      explorerChainId={explorerChainId}
-                    />
-                  </div>
-                  {aggregatorDecimals != null ? (
-                    <p className="text-[10px] text-muted-foreground">
-                      Min/max prices use the aggregator&apos;s decimal places ({aggregatorDecimals}).
-                    </p>
-                  ) : null}
-                </div>
-              ) : canLookupFeedFromVaults &&
+              {canLookupFeedFromVaults &&
                 dataFeedAddrReadsSettled &&
                 !dataFeedAddress &&
                 !vaultDetailLoading &&
@@ -1214,7 +1366,7 @@ export default function NAVManagementPage() {
                     className="font-mono mt-1"
                     disabled={!dataFeedAddress}
                   />
-                  {healthyDiffSeconds !== savedFeed.healthyDiffSeconds && (
+                  {showContractDevHints && healthyDiffSeconds !== savedFeed.healthyDiffSeconds && (
                     <span className="text-[10px] text-accent font-mono">→ setHealthyDiff(uint256)</span>
                   )}
                 </div>
@@ -1231,13 +1383,15 @@ export default function NAVManagementPage() {
                     <p className="text-[10px] text-muted-foreground mt-1">Loading aggregator decimals for price conversion…</p>
                   ) : minPriceRawPreview === "invalid" ? (
                     <p className="text-[10px] text-destructive mt-1">Invalid number for this decimal precision.</p>
-                  ) : minPriceRawPreview != null ? (
+                  ) : showContractDevHints && minPriceRawPreview != null ? (
                     <p className="text-[10px] font-mono text-muted-foreground mt-1">
                       Contract call: <span className="text-foreground/90">{minPriceRawPreview}</span>{" "}
                       <span className="text-muted-foreground/80">(int256)</span>
                     </p>
                   ) : null}
-                  {minPriceHuman !== savedFeed.minPriceHuman && minPriceRawPreview !== "invalid" ? (
+                  {showContractDevHints &&
+                  minPriceHuman !== savedFeed.minPriceHuman &&
+                  minPriceRawPreview !== "invalid" ? (
                     <span className="text-[10px] text-accent font-mono block mt-0.5">→ setMinExpectedAnswer(int256)</span>
                   ) : null}
                 </div>
@@ -1252,22 +1406,19 @@ export default function NAVManagementPage() {
                   />
                   {aggregatorDecimals == null && dataFeedAddress ? null : maxPriceRawPreview === "invalid" ? (
                     <p className="text-[10px] text-destructive mt-1">Invalid number for this decimal precision.</p>
-                  ) : maxPriceRawPreview != null ? (
+                  ) : showContractDevHints && maxPriceRawPreview != null ? (
                     <p className="text-[10px] font-mono text-muted-foreground mt-1">
                       Contract call: <span className="text-foreground/90">{maxPriceRawPreview}</span>{" "}
                       <span className="text-muted-foreground/80">(int256)</span>
                     </p>
                   ) : null}
-                  {maxPriceHuman !== savedFeed.maxPriceHuman && maxPriceRawPreview !== "invalid" ? (
+                  {showContractDevHints &&
+                  maxPriceHuman !== savedFeed.maxPriceHuman &&
+                  maxPriceRawPreview !== "invalid" ? (
                     <span className="text-[10px] text-accent font-mono block mt-0.5">→ setMaxExpectedAnswer(int256)</span>
                   ) : null}
                 </div>
               </div>
-              <p className="text-[10px] text-muted-foreground">
-                <span className="font-mono">DataFeed.sol</span>: <span className="font-mono">healthyDiff</span> is
-                seconds; min/max bound the Chainlink <span className="font-mono">latestRoundData</span> answer (same
-                decimals as the aggregator).
-              </p>
               <WalletChainGateOrActions gate={gate}>
                 <Button
                   variant="outline"
@@ -1288,9 +1439,11 @@ export default function NAVManagementPage() {
         open={confirmOpen}
         onOpenChange={handleConfirmOpenChange}
         action={confirmAction}
+        actionContractNote={confirmKind === "nav" ? confirmActionContractNote : undefined}
         newValue={confirmValue}
-        newValueSecondary={confirmKind === "nav" ? confirmNavContractLine : undefined}
-        newValueLabel={confirmKind === "nav" ? "New NAV" : "New Value"}
+        newValueLabel={
+          confirmKind === "nav" ? "New NAV" : confirmKind === "feed" ? "Batch" : "New Value"
+        }
         contractAddress={
           confirmKind === "feed" && dataFeedAddress
             ? dataFeedAddress
@@ -1303,7 +1456,7 @@ export default function NAVManagementPage() {
           !walletAddress && isConnected ? "Connected" : !isConnected ? "Not connected" : undefined
         }
         explorerChainId={explorerChainId}
-        summaryLines={confirmKind === "feed" && feedSummaryLines.length ? feedSummaryLines : undefined}
+        summaryRows={confirmKind === "feed" && feedSummaryRows.length ? feedSummaryRows : undefined}
         onConfirm={
           confirmKind === "feed"
             ? runPlannedFeedSteps
@@ -1313,11 +1466,12 @@ export default function NAVManagementPage() {
         }
         pendingMessage={
           confirmKind === "feed"
-            ? "Submit each step in your wallet. Multiple transactions may be required."
+            ? feedConfirmPendingMessage
             : confirmKind === "nav"
               ? "Submit in your wallet and wait for confirmation."
               : undefined
         }
+        batchProgress={confirmKind === "feed" ? feedBatchProgress : null}
       />
     </div>
   );

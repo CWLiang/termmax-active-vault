@@ -2,17 +2,36 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { useEffect, useState } from "react";
 import { Loader2, CheckCircle2, XCircle, Copy, ExternalLink } from "lucide-react";
 import { isAddress } from "viem";
 import { toast } from "sonner";
 import { getExplorerAddressUrl } from "@/lib/explorer";
+import { showConfirmModalContractDetails } from "@/lib/confirm-modal-env";
 import { useAccount, useChainId, useConnect, useSwitchChain } from "wagmi";
+
+/** One row in the confirmation summary: readable text first, optional raw calldata note below. */
+export type ConfirmSummaryRow = {
+  human: string;
+  contractNote?: string;
+};
+
+/** Label + value rows (e.g. Amount / Recipient) shown like the Action row — no parent "Summary" label. */
+export type ConfirmModalValueRow = {
+  label: string;
+  value: string;
+};
 
 interface ConfirmActionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Human-readable title for what the user is doing (not a raw function name). */
   action: string;
+  /**
+   * Dev-only footnote under Action: function name and encoded args (see `showConfirmModalContractDetails`).
+   */
+  actionContractNote?: string;
   newValue?: string;
   /** Shown under the human-readable `newValue` (e.g. raw int256 for contract). */
   newValueSecondary?: string;
@@ -30,10 +49,14 @@ interface ConfirmActionModalProps {
   onConfirm?: () => Promise<void>;
   /** Label for the `newValue` row (default: "New Value"). */
   newValueLabel?: string;
-  /** Extra lines under the header (e.g. batched feed updates). */
-  summaryLines?: string[];
+  /** Step-by-step summary: human-readable lines with optional contract call footnotes. */
+  summaryRows?: ConfirmSummaryRow[];
+  /** When set, shown as primary label/value rows instead of `newValue` + `newValueLabel` (no "Summary" header). */
+  valueRows?: ConfirmModalValueRow[];
   /** Shown while `onConfirm` is in flight. */
   pendingMessage?: string;
+  /** When set with `total > 1`, shows a progress bar for multi-step wallet flows. */
+  batchProgress?: { current: number; total: number } | null;
 }
 
 function shortAddr(a: string) {
@@ -95,6 +118,7 @@ export function ConfirmActionModal({
   open,
   onOpenChange,
   action,
+  actionContractNote,
   newValue,
   newValueSecondary,
   newValueLabel = "New Value",
@@ -104,8 +128,10 @@ export function ConfirmActionModal({
   explorerChainId,
   wallet: walletLegacy,
   onConfirm,
-  summaryLines,
+  summaryRows,
+  valueRows,
   pendingMessage = "Submit in your wallet and wait for the transaction to be mined.",
+  batchProgress = null,
 }: ConfirmActionModalProps) {
   const { isConnected } = useAccount();
   const walletChainId = useChainId();
@@ -119,11 +145,14 @@ export function ConfirmActionModal({
       : (walletFallback ?? walletLegacy ?? "Not connected");
   const [status, setStatus] = useState<"idle" | "pending" | "success" | "error">("idle");
   const [errorText, setErrorText] = useState<string | null>(null);
+  /** True once this modal opening had a real submit handler (prevents false "Preview only" after parent state clears). */
+  const [hadConfirmHandler, setHadConfirmHandler] = useState(false);
   const wrongChain =
     isConnected &&
     explorerChainId != null &&
     Number.isFinite(explorerChainId) &&
     walletChainId !== explorerChainId;
+  const showContractDetails = showConfirmModalContractDetails();
 
   const handleConnectWallet = async () => {
     const connector = connectors[0];
@@ -144,8 +173,13 @@ export function ConfirmActionModal({
     if (open) {
       setStatus("idle");
       setErrorText(null);
+      setHadConfirmHandler(Boolean(onConfirm));
     }
-  }, [open]);
+  }, [open, onConfirm]);
+
+  useEffect(() => {
+    if (open && onConfirm) setHadConfirmHandler(true);
+  }, [open, onConfirm]);
 
   const handleConfirm = () => {
     if (onConfirm) {
@@ -154,10 +188,6 @@ export function ConfirmActionModal({
       void onConfirm()
         .then(() => {
           setStatus("success");
-          setTimeout(() => {
-            setStatus("idle");
-            onOpenChange(false);
-          }, 1500);
         })
         .catch((e: unknown) => {
           const msg =
@@ -175,14 +205,11 @@ export function ConfirmActionModal({
     setStatus("pending");
     setTimeout(() => {
       setStatus("success");
-      setTimeout(() => {
-        setStatus("idle");
-        onOpenChange(false);
-      }, 1500);
     }, 2000);
   };
 
   const blockDismiss = status === "pending";
+  const isPreviewOnly = !onConfirm && !hadConfirmHandler;
 
   return (
     <Dialog
@@ -209,29 +236,78 @@ export function ConfirmActionModal({
           <DialogTitle className="font-display">Confirm Action</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 text-sm">
-          <div className="flex justify-between gap-2">
-            <span className="text-muted-foreground shrink-0">Action</span>
-            <span className="font-mono text-right break-all">{action}</span>
+          <div className="space-y-1">
+            <div className="flex justify-between gap-2 items-start">
+              <span className="text-muted-foreground shrink-0 pt-0.5">Action</span>
+              <span className="text-foreground text-right break-words min-w-0 max-w-[min(100%,20rem)] leading-snug">
+                {action}
+              </span>
+            </div>
+            {showContractDetails && actionContractNote ? (
+              <p className="text-[11px] font-mono text-muted-foreground text-right break-all leading-snug">
+                {/^contract\b/i.test(actionContractNote.trim())
+                  ? actionContractNote
+                  : `Contract: ${actionContractNote}`}
+              </p>
+            ) : null}
           </div>
-          {newValue ? (
+          {valueRows != null && valueRows.length > 0 ? (
+            <div className="space-y-2">
+              {valueRows.map((row, i) => (
+                <div key={`${row.label}-${i}`} className="flex justify-between gap-2 items-start">
+                  <span className="text-muted-foreground shrink-0 pt-0.5">{row.label}</span>
+                  <span className="text-foreground text-right break-words min-w-0 max-w-[min(100%,20rem)] leading-snug whitespace-pre-line">
+                    {row.value}
+                  </span>
+                </div>
+              ))}
+              {showContractDetails && newValueSecondary ? (
+                <p className="text-[11px] font-mono text-muted-foreground text-right break-all leading-snug">
+                  {/^contract\b/i.test(newValueSecondary.trim())
+                    ? newValueSecondary
+                    : `Contract: ${newValueSecondary}`}
+                </p>
+              ) : null}
+            </div>
+          ) : newValue ? (
             <div className="space-y-1">
               <div className="flex justify-between gap-2">
                 <span className="text-muted-foreground shrink-0">{newValueLabel}</span>
-                <span className="font-mono text-right break-all min-w-0">{newValue}</span>
+                <span
+                  className={`text-right break-all min-w-0 whitespace-pre-line ${
+                    newValueLabel === "New NAV" ? "font-mono" : "text-foreground"
+                  }`}
+                >
+                  {newValue}
+                </span>
               </div>
-              {newValueSecondary ? (
+              {showContractDetails && newValueSecondary ? (
                 <p className="text-[11px] font-mono text-muted-foreground text-right break-all leading-snug">
-                  {newValueSecondary}
+                  {/^contract\b/i.test(newValueSecondary.trim())
+                    ? newValueSecondary
+                    : `Contract: ${newValueSecondary}`}
                 </p>
               ) : null}
             </div>
           ) : null}
-          {summaryLines?.length ? (
-            <ul className="text-xs font-mono text-muted-foreground list-disc pl-4 space-y-1">
-              {summaryLines.map((line) => (
-                <li key={line} className="whitespace-pre-wrap break-words">{line}</li>
-              ))}
-            </ul>
+          {summaryRows?.length ? (
+            <div className="rounded-md border border-border/60 bg-muted/15 px-3 py-2.5 space-y-2">
+              <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                What will change
+              </div>
+              <ul className="space-y-2.5 list-none pl-0">
+                {summaryRows.map((row, i) => (
+                  <li key={`${i}-${row.human.slice(0, 24)}`} className="space-y-1">
+                    <div className="text-sm text-foreground leading-snug">{row.human}</div>
+                    {showContractDetails && row.contractNote ? (
+                      <p className="text-[10px] font-mono text-muted-foreground/85 leading-snug pl-0 border-l-2 border-border/80 pl-2">
+                        Contract: {row.contractNote}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
           {isAddress(contractAddress.trim()) ? (
             <AddressRowWithActions
@@ -247,22 +323,49 @@ export function ConfirmActionModal({
           )}
           {walletAddress && isAddress(walletAddress.trim()) ? (
             <AddressRowWithActions
-              label="Wallet"
+              label="Sender"
               fullAddress={walletAddress.trim()}
               explorerChainId={explorerChainId}
             />
           ) : (
             <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground shrink-0">Wallet</span>
+              <span className="text-muted-foreground shrink-0">Sender</span>
               <span className="font-mono text-xs text-right break-all">{walletRowText}</span>
             </div>
           )}
+          {isPreviewOnly ? (
+            <div className="rounded-md border border-accent/30 bg-accent/10 px-3 py-2">
+              <span className="text-xs font-medium text-accent">Preview only</span>
+              <p className="text-xs text-muted-foreground mt-1">
+                This confirmation is a UI preview and will not submit an on-chain transaction.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         {status === "pending" && (
-          <div className="flex items-center gap-2 text-accent text-sm p-3 bg-accent/10 rounded-lg">
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-            {pendingMessage}
+          <div className="space-y-2 text-accent text-sm p-3 bg-accent/10 rounded-lg">
+            {batchProgress != null &&
+            batchProgress.total > 1 &&
+            batchProgress.current >= 1 &&
+            batchProgress.current <= batchProgress.total ? (
+              <div className="space-y-1.5">
+                <div className="flex justify-between gap-2 text-[11px] font-medium text-accent/95 uppercase tracking-wide">
+                  <span>Signing progress</span>
+                  <span className="font-mono tabular-nums normal-case">
+                    {batchProgress.current} / {batchProgress.total}
+                  </span>
+                </div>
+                <Progress
+                  className="h-2 bg-accent/20"
+                  value={Math.min(100, Math.round((100 * batchProgress.current) / batchProgress.total))}
+                />
+              </div>
+            ) : null}
+            <div className="flex items-start gap-2">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin mt-0.5" />
+              <span className="leading-snug min-w-0">{pendingMessage}</span>
+            </div>
           </div>
         )}
         {status === "success" && (
@@ -304,6 +407,20 @@ export function ConfirmActionModal({
             ) : (
               <Button onClick={handleConfirm}>Submit</Button>
             )}
+          </DialogFooter>
+        )}
+
+        {status === "success" && (
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setStatus("idle");
+                setErrorText(null);
+                onOpenChange(false);
+              }}
+            >
+              Close
+            </Button>
           </DialogFooter>
         )}
       </DialogContent>

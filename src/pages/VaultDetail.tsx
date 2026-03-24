@@ -30,11 +30,10 @@ import { useAccount } from "wagmi";
 import type { PortfolioPieSlice, PortfolioRow, VaultDetailView } from "@/domain/vaults/mappers";
 import { getExplorerAddressUrl, getExplorerTxUrl } from "@/lib/explorer";
 import { parseDecimal } from "@/domain/vaults/mappers";
+import { formatDisplayNumber, formatUsdCompact } from "@/lib/formatNumbers";
 
 function formatUSD(value: number) {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(2)}`;
+  return formatUsdCompact(value, "detail");
 }
 
 function truncateAddress(addr: string) {
@@ -47,7 +46,10 @@ function copyToClipboard(text: string) {
 }
 
 function VaultDetailsSection({ view }: { view: VaultDetailView }) {
-  const perfPct = view.performanceFeeBps != null ? (view.performanceFeeBps / 100).toFixed(2) : null;
+  const perfPct =
+    view.performanceFeeBps != null
+      ? formatDisplayNumber(view.performanceFeeBps / 100, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : null;
   const explorer = getExplorerAddressUrl(view.chainId, view.mTokenAddress);
 
   return (
@@ -208,7 +210,9 @@ function PortfolioSection({
       </div>
       <div className="flex items-center shrink-0">
         {showPct ? (
-          <span className="font-mono text-xs text-foreground w-12 text-right">{row.valuePct.toFixed(1)}%</span>
+          <span className="font-mono text-xs text-foreground w-12 text-right">
+            {formatDisplayNumber(row.valuePct, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+          </span>
         ) : (
           <span className="w-12" />
         )}
@@ -300,7 +304,8 @@ function PortfolioSection({
               {pieData.map((entry, i) => (
                 <span key={i} className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
                   <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.color }} />
-                  {entry.name} {entry.value.toFixed(1)}%
+                  {entry.name}{" "}
+                  {formatDisplayNumber(entry.value, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
                 </span>
               ))}
             </div>
@@ -319,7 +324,9 @@ function PortfolioSection({
                       {cat}
                     </span>
                     <div className="flex items-center">
-                      <span className="font-mono text-xs font-semibold text-foreground w-12 text-right">{catPct.toFixed(1)}%</span>
+                      <span className="font-mono text-xs font-semibold text-foreground w-12 text-right">
+                        {formatDisplayNumber(catPct, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                      </span>
                       <span className="font-mono text-xs text-muted-foreground w-24 text-right">{formatUSD(catAmount)}</span>
                     </div>
                   </div>
@@ -384,7 +391,9 @@ function NAVChart({
           <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5">
             <TrendingUp className="h-3.5 w-3.5 text-primary" />
             <span className="text-xs text-muted-foreground font-mono">APY</span>
-            <span className="text-sm font-mono font-bold text-primary">{currentAPY.toFixed(2)}%</span>
+            <span className="text-sm font-mono font-bold text-primary">
+              {formatDisplayNumber(currentAPY, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+            </span>
           </div>
           <div className="flex bg-secondary rounded-lg p-0.5">
             {(["7d", "30d", "90d"] as const).map((p) => (
@@ -405,7 +414,9 @@ function NAVChart({
       </div>
 
       <div className="flex items-baseline gap-2 mb-4">
-        <span className="text-2xl font-mono font-bold text-foreground">${latestNAV.toFixed(4)}</span>
+        <span className="text-2xl font-mono font-bold text-foreground">
+          ${formatDisplayNumber(latestNAV, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}
+        </span>
         <span
           className={cn(
             "text-xs font-mono",
@@ -413,7 +424,7 @@ function NAVChart({
           )}
         >
           {view.navDelta24h >= 0 ? "+" : ""}
-          {view.navDelta24h.toFixed(3)}% (24h)
+          {formatDisplayNumber(view.navDelta24h, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}% (24h)
         </span>
       </div>
 
@@ -442,7 +453,9 @@ function NAVChart({
                 tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(v: number) => v.toFixed(3)}
+                tickFormatter={(v: number) =>
+                  formatDisplayNumber(v, { minimumFractionDigits: 0, maximumFractionDigits: 3 })
+                }
               />
               <RechartsTooltip
                 contentStyle={{
@@ -452,7 +465,10 @@ function NAVChart({
                   fontSize: 12,
                 }}
                 labelStyle={{ color: "hsl(215, 15%, 55%)" }}
-                formatter={(value: number) => [`$${value.toFixed(4)}`, "NAV"]}
+                formatter={(value: number) => [
+                  `$${formatDisplayNumber(value, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}`,
+                  "NAV",
+                ]}
               />
               <Area type="monotone" dataKey="nav" stroke="hsl(187, 100%, 50%)" strokeWidth={2} fill="url(#navGradient)" />
             </AreaChart>
@@ -538,7 +554,7 @@ function WithdrawPanel({ view }: { view: VaultDetailView }) {
             />
             <div className="flex justify-end mt-1">
               <span className="text-[10px] text-muted-foreground font-mono">
-                Balance: {userBalance.toLocaleString()} {view.underlyingSymbol}
+                Balance: {formatDisplayNumber(userBalance, { maximumFractionDigits: 6 })} {view.underlyingSymbol}
               </span>
             </div>
           </div>
@@ -696,7 +712,9 @@ export default function VaultDetailPage() {
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Vault Capacity</span>
                 <span className="text-xs font-mono text-muted-foreground">
-                  {view.capacity > 0 ? `${((view.tvl / view.capacity) * 100).toFixed(0)}% filled` : "—"}
+                  {view.capacity > 0
+                    ? `${formatDisplayNumber((view.tvl / view.capacity) * 100, { maximumFractionDigits: 0 })}% filled`
+                    : "—"}
                 </span>
               </div>
               <div className="flex items-baseline gap-1">
@@ -798,14 +816,18 @@ export default function VaultDetailPage() {
                   <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">My Position</span>
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-xl font-display font-bold text-foreground">
-                      {myPosition ? myPosition.shares.toLocaleString(undefined, { maximumFractionDigits: 4 }) : "—"}
+                      {myPosition
+                        ? formatDisplayNumber(myPosition.shares, { maximumFractionDigits: 4 })
+                        : "—"}
                     </span>
                     <span className="text-xs font-mono text-muted-foreground">{view.underlyingSymbol}</span>
                   </div>
                 </div>
                 <div className="flex justify-end mt-0.5">
                   <span className="text-[10px] font-mono text-muted-foreground">
-                    {myPosition ? `≈ $${myPosition.redeemableUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "Connect wallet to view"}
+                    {myPosition
+                      ? `≈ $${formatDisplayNumber(myPosition.redeemableUSD, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : "Connect wallet to view"}
                   </span>
                 </div>
               </div>

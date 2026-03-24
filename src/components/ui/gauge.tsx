@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { formatDisplayNumber } from "@/lib/formatNumbers";
 
 interface GaugeProps {
   value: number;
@@ -23,7 +24,11 @@ export function Gauge({ value, max, label, thresholds, className, showPercentage
     <div className={cn("space-y-1.5", className)}>
       <div className="flex items-center justify-between text-xs">
         <span className="text-muted-foreground font-mono">{label}</span>
-        {showPercentage && <span className="text-foreground font-mono">{percentage.toFixed(1)}%</span>}
+        {showPercentage && (
+          <span className="text-foreground font-mono">
+            {formatDisplayNumber(percentage, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+          </span>
+        )}
       </div>
       <div className="h-1.5 rounded-full bg-muted overflow-hidden">
         <div

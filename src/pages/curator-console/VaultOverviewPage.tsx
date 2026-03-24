@@ -17,11 +17,10 @@ import { manageableVaultAbi } from "@/abis/manageableVault";
 import { depositVaultAbi } from "@/abis/depositVault";
 import { useWalletChainGate } from "@/hooks/useWalletChainGate";
 import { WalletChainGateOrActions } from "@/components/wallet/WalletChainGateOrActions";
+import { formatDisplayNumber, formatNumberKmb, formatUsdCompact } from "@/lib/formatNumbers";
 
 function formatUSD(value: number) {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(2)}`;
+  return formatUsdCompact(value, "detail");
 }
 
 function formatTokenAmount(raw: bigint | undefined, decimals: number | undefined) {
@@ -29,9 +28,7 @@ function formatTokenAmount(raw: bigint | undefined, decimals: number | undefined
   const d = decimals ?? 18;
   const n = Number(formatUnits(raw, d));
   if (!Number.isFinite(n)) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(2)}K`;
-  return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  return formatNumberKmb(n, { maxFracBelow1000: 4, suffixMaxFrac: 2 });
 }
 
 function shortAddr(a: string) {
@@ -185,21 +182,9 @@ function VaultSidePanel({
   const canReadReceivers = Number.isFinite(chainId) && isAddress(contractAddress ?? "");
 
   const {
-    data: tokenReceiverV1,
-    isLoading: tokenReceiverV1Loading,
-    isError: tokenReceiverV1Error,
-  } = useReadContract({
-    address: vaultAddress,
-    abi: manageableVaultAbi,
-    functionName: "tokenReceiver",
-    chainId,
-    query: { enabled: canReadReceivers },
-  });
-
-  const {
-    data: tokenReceiverV2,
-    isLoading: tokenReceiverV2Loading,
-    isError: tokenReceiverV2Error,
+    data: tokenReceiver,
+    isLoading: tokenReceiverLoading,
+    isError: tokenReceiverError,
   } = useReadContract({
     address: vaultAddress,
     abi: manageableVaultAbi,
@@ -219,9 +204,6 @@ function VaultSidePanel({
     chainId,
     query: { enabled: canReadReceivers },
   });
-  const tokenReceiver = tokenReceiverV1 ?? tokenReceiverV2;
-  const tokenReceiverLoading = tokenReceiverV1Loading || tokenReceiverV2Loading;
-  const tokenReceiverError = tokenReceiverV1Error && tokenReceiverV2Error;
 
   return (
     <Card className="bg-card border-border h-full">
@@ -356,8 +338,9 @@ export default function VaultOverviewPage() {
           await publicClient.waitForTransactionReceipt({ hash });
         }
         if (typeof chainId === "number") {
+          const sym = mTokenSymbol ?? "mToken";
           toastChainTxSuccess(
-            action === "pause" ? "mToken paused" : "mToken unpaused",
+            action === "pause" ? `${sym} paused` : `${sym} unpaused`,
             chainId,
             hash,
           );
@@ -369,7 +352,17 @@ export default function VaultOverviewPage() {
         setTxBusy(false);
       }
     },
-    [chainId, chainSupported, gate.canTransact, mToken, mTokenAddress, publicClient, refetchPaused, writeMToken],
+    [
+      chainId,
+      chainSupported,
+      gate.canTransact,
+      mToken,
+      mTokenAddress,
+      mTokenSymbol,
+      publicClient,
+      refetchPaused,
+      writeMToken,
+    ],
   );
 
   const tvl = vault?.tvl ?? 0;
@@ -422,9 +415,13 @@ export default function VaultOverviewPage() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
           <Card className="bg-card border-border">
             <CardContent className="pt-4 pb-4">
-              <div className="text-xs text-muted-foreground">NAV (USD / share)</div>
+              <div className="text-xs text-muted-foreground">
+                NAV (USD / {mTokenSymbol ?? "mToken"})
+              </div>
               <div className="text-xl font-mono font-bold text-foreground mt-1">
-                {vault ? `$${vault.navPerShare.toFixed(4)}` : "—"}
+                {vault
+                  ? `$${formatDisplayNumber(vault.navPerShare, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}`
+                  : "—"}
               </div>
             </CardContent>
           </Card>
@@ -451,7 +448,7 @@ export default function VaultOverviewPage() {
                 <>
                   <Progress value={supplyUtilizationPct} className="h-1.5 mt-2" />
                   <div className="text-[10px] font-mono text-muted-foreground mt-1">
-                    {supplyUtilizationPct.toFixed(0)}% utilized
+                    {formatDisplayNumber(supplyUtilizationPct, { maximumFractionDigits: 0 })}% utilized
                   </div>
                 </>
               ) : null}
@@ -523,7 +520,7 @@ export default function VaultOverviewPage() {
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm font-mono text-foreground">
-              {vault?.underlyingSymbol ?? "mToken"}:{" "}
+              {mTokenSymbol ?? "mToken"}:{" "}
               {pausedLoading ? (
                 <span className="text-muted-foreground">…</span>
               ) : pausedReadError || !chainSupported ? (
@@ -559,7 +556,7 @@ export default function VaultOverviewPage() {
                     disabled={writePending || txBusy}
                     onClick={() => void runPauseToggle("unpause")}
                   >
-                    {writePending || txBusy ? "Submit…" : `Unpause ${vault?.underlyingSymbol ?? "mToken"}`}
+                    {writePending || txBusy ? "Submit…" : `Unpause ${mTokenSymbol ?? "mToken"}`}
                   </Button>
                 ) : (
                   <Button
@@ -570,7 +567,7 @@ export default function VaultOverviewPage() {
                     disabled={writePending || txBusy}
                     onClick={() => void runPauseToggle("pause")}
                   >
-                    {writePending || txBusy ? "Submit…" : `Pause ${vault?.underlyingSymbol ?? "mToken"}`}
+                    {writePending || txBusy ? "Submit…" : `Pause ${mTokenSymbol ?? "mToken"}`}
                   </Button>
                 )}
               </WalletChainGateOrActions>

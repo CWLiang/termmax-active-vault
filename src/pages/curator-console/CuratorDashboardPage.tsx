@@ -6,11 +6,10 @@ import { useNavigate } from "react-router-dom";
 import { useVaultListData } from "@/hooks/queries/useVaultListData";
 import { vaultDetailPath } from "@/domain/vaults/mappers";
 import { curatorVaultSectionPath } from "@/lib/curatorConsolePaths";
+import { formatDisplayNumber, formatUsdCompact } from "@/lib/formatNumbers";
 
 function formatUSD(value: number) {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+  return formatUsdCompact(value, "list");
 }
 
 export default function CuratorDashboardPage() {
@@ -54,14 +53,15 @@ export default function CuratorDashboardPage() {
                     <div>
                       <span className="text-muted-foreground text-xs">NAV (USD / share)</span>
                       <div className="font-mono font-semibold text-foreground">
-                        ${v.navPerShare.toFixed(4)}
+                        $
+                        {formatDisplayNumber(v.navPerShare, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}
                       </div>
                     </div>
                     <div>
                       <span className="text-muted-foreground text-xs">APY (7d)</span>
                       <div className="flex items-center gap-1.5 font-mono text-sm text-yield-positive">
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        {v.apy7d.toFixed(2)}%
+                        {formatDisplayNumber(v.apy7d, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
                       </div>
                     </div>
                     <div>
@@ -72,7 +72,9 @@ export default function CuratorDashboardPage() {
                         ) : (
                           <AlertTriangle className="h-3.5 w-3.5 text-accent" />
                         )}
-                        <span>{v.bufferRatio.toFixed(1)}%</span>
+                        <span>
+                          {formatDisplayNumber(v.bufferRatio, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                        </span>
                       </div>
                     </div>
                   </div>

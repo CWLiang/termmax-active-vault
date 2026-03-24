@@ -18,13 +18,6 @@ export const manageableVaultAbi = [
   },
   {
     type: "function",
-    name: "tokenReceiver",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ type: "address", name: "" }],
-  },
-  {
-    type: "function",
     name: "tokensReceiver",
     stateMutability: "view",
     inputs: [],
@@ -95,6 +88,13 @@ export const manageableVaultAbi = [
   },
   {
     type: "function",
+    name: "variationTolerance",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256", name: "" }],
+  },
+  {
+    type: "function",
     name: "addPaymentToken",
     stateMutability: "nonpayable",
     inputs: [
@@ -114,6 +114,57 @@ export const manageableVaultAbi = [
       { type: "address", name: "token" },
       { type: "uint256", name: "amount" },
       { type: "address", name: "withdrawTo" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "getPaymentTokens",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address[]", name: "" }],
+  },
+  {
+    type: "function",
+    name: "tokensConfig",
+    stateMutability: "view",
+    inputs: [{ type: "address", name: "token" }],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          { type: "address", name: "dataFeed" },
+          { type: "uint256", name: "fee" },
+          { type: "uint256", name: "allowance" },
+          { type: "bool", name: "stable" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "removePaymentToken",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "address", name: "token" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "changeTokenFee",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "address", name: "token" },
+      { type: "uint256", name: "fee" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "changeTokenAllowance",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "address", name: "token" },
+      { type: "uint256", name: "allowance" },
     ],
     outputs: [],
   },

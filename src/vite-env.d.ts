@@ -7,6 +7,11 @@ interface ImportMetaEnv {
   readonly VITE_RPC_URL_MAINNET?: string;
   /** Optional RPC URL for Sepolia */
   readonly VITE_RPC_URL_SEPOLIA?: string;
+  /**
+   * Confirm modals: show function/args footnotes. Unset = on in `vite dev`, off in prod.
+   * Override with "true"/"1" or "false"/"0".
+   */
+  readonly VITE_CONFIRM_MODAL_SHOW_CONTRACT_DETAILS?: string;
 }
 
 interface ImportMeta {
