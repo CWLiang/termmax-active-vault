@@ -299,6 +299,9 @@ export default function RedemptionPage() {
       | "setVariationTolerance"
       | "safeBulkApproveRequestAtSavedRate"
       | "safeBulkApproveRequest"
+      | "safeApproveRequest"
+      | "approveRequest"
+      | "rejectRequest"
       | "changeTokenFee"
       | "changeTokenAllowance"
       | "withdrawToken";
@@ -339,6 +342,10 @@ export default function RedemptionPage() {
   const [newRate, setNewRate] = useState(CURRENT_NAV_FALLBACK);
   const [rateModalBaselineNav, setRateModalBaselineNav] = useState(CURRENT_NAV_FALLBACK);
   const [rateModalBulkMode, setRateModalBulkMode] = useState<"bulk-new-rate" | null>(null);
+  const [rateModalSingleMode, setRateModalSingleMode] = useState<"single-safe" | "single-approve" | null>(
+    null,
+  );
+  const [rateModalRequestId, setRateModalRequestId] = useState<string | null>(null);
 
   // Vault settings
   const [instantFeeInput, setInstantFeeInput] = useState("0.10");
@@ -742,6 +749,42 @@ export default function RedemptionPage() {
 
   const submitRateModal = () => {
     setRateModalOpen(false);
+    if (rateModalSingleMode) {
+      if (!rateModalRequestId || !/^\d+$/.test(rateModalRequestId)) {
+        toast.error("Invalid request id.");
+        return;
+      }
+      const requestId = BigInt(rateModalRequestId);
+      let newRateRaw: bigint;
+      try {
+        newRateRaw = parseUnits(stripNumberGrouping(newRate) || "0", 18);
+      } catch {
+        toast.error("New rate is invalid.");
+        return;
+      }
+      if (newRateRaw <= 0n) {
+        toast.error("New rate must be greater than 0.");
+        return;
+      }
+      const isSafe = rateModalSingleMode === "single-safe";
+      queueVaultCall(
+        `${isSafe ? "Safe Approve" : "Approve"} #${rateModalRequestId} with New Rate`,
+        formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 6,
+        }),
+        isSafe ? "safeApproveRequest" : "approveRequest",
+        [requestId, newRateRaw],
+        isSafe ? "Safe approve submitted" : "Approve submitted",
+        `${isSafe ? "safeApproveRequest" : "approveRequest"}(${requestId.toString()}, ${newRateRaw.toString()})`,
+        true,
+        null,
+        "New Rate",
+      );
+      setRateModalSingleMode(null);
+      setRateModalRequestId(null);
+      return;
+    }
     if (rateModalBulkMode === "bulk-new-rate") {
       if (selected.length === 0) {
         toast.error("Select at least one request.");
@@ -989,6 +1032,9 @@ export default function RedemptionPage() {
         setVariationTolerance: "Set Variation Tolerance Tx",
         safeBulkApproveRequestAtSavedRate: "Bulk Approve at Saved Rate Tx",
         safeBulkApproveRequest: "Bulk Approve Tx",
+        safeApproveRequest: "Safe Approve with New Rate Tx",
+        approveRequest: "Approve with New Rate Tx",
+        rejectRequest: "Reject Request Tx",
         changeTokenFee: "Change Payment Token Fee Tx",
         changeTokenAllowance: "Change Payment Token Allowance Tx",
         withdrawToken: "Withdraw Token Tx",
@@ -1151,6 +1197,8 @@ export default function RedemptionPage() {
             <Button size="sm" variant="outline" className="text-xs" disabled={selected.length === 0}
               onClick={() => {
                 setRateModalBulkMode("bulk-new-rate");
+                setRateModalSingleMode(null);
+                setRateModalRequestId(null);
                 openRateModal(`Bulk Approve at New Rate (${selectedIds})`, "Bulk Approve at New Rate");
               }}>
               Bulk Approve at New Rate
@@ -1191,15 +1239,40 @@ export default function RedemptionPage() {
                       <td colSpan={5} className="py-3 px-4 bg-secondary/20">
                         <div className="flex gap-2 flex-wrap">
                           <Button size="sm" className="text-xs"
-                            onClick={() => openRateModal(`Safe Approve #${r.id} with New Rate`, `Safe Approve #${r.id}`)}>
+                            onClick={() => {
+                              setRateModalSingleMode("single-safe");
+                              setRateModalRequestId(r.id);
+                              openRateModal(`Safe Approve #${r.id} with New Rate`, `Safe Approve #${r.id}`);
+                            }}>
                             Safe Approve with New Rate
                           </Button>
                           <Button size="sm" variant="outline" className="text-xs"
-                            onClick={() => openRateModal(`Approve #${r.id} with New Rate`, `Approve #${r.id}`)}>
+                            onClick={() => {
+                              setRateModalSingleMode("single-approve");
+                              setRateModalRequestId(r.id);
+                              openRateModal(`Approve #${r.id} with New Rate`, `Approve #${r.id}`);
+                            }}>
                             Approve with New Rate
                           </Button>
                           <Button size="sm" variant="destructive" className="text-xs"
-                            onClick={() => openConfirm(`Reject #${r.id}`)}>
+                            onClick={() => {
+                              if (!/^\d+$/.test(r.id)) {
+                                toast.error(`Invalid request id: ${r.id}`);
+                                return;
+                              }
+                              const requestId = BigInt(r.id);
+                              queueVaultCall(
+                                `Reject #${r.id}`,
+                                `Request #${r.id}`,
+                                "rejectRequest",
+                                [requestId],
+                                "Request rejected",
+                                `rejectRequest(${requestId.toString()})`,
+                                true,
+                                null,
+                                "Request",
+                              );
+                            }}>
                             Reject
                           </Button>
                         </div>
@@ -1699,6 +1772,9 @@ export default function RedemptionPage() {
             setConfirmActionContractNote("");
             setConfirmValueLabel(undefined);
             setConfirmValueRows(null);
+            setRateModalBulkMode(null);
+            setRateModalSingleMode(null);
+            setRateModalRequestId(null);
           }
         }}
         action={confirmAction}

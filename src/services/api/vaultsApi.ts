@@ -2,6 +2,7 @@ import { apiGet } from "./client";
 import type {
   ActivityResponseDto,
   AllocationResponseDto,
+  DepositRequestListResponseDto,
   NavSnapshotDto,
   RedeemRequestListResponseDto,
   RequestStatus,
@@ -81,6 +82,28 @@ export function getRedeemRequests(
 ): Promise<RedeemRequestListResponseDto> {
   return apiGet(
     `/vaults/${chainId}/${mTokenAddress}/redeem-requests${buildQuery({
+      status: opts.status,
+      user: opts.user,
+      limit: opts.limit ?? 10,
+      page: opts.page ?? 1,
+      sortOrder: opts.sortOrder ?? "desc",
+    })}`,
+  );
+}
+
+export function getDepositRequests(
+  chainId: number,
+  mTokenAddress: string,
+  opts: {
+    status?: RequestStatus;
+    user?: string;
+    limit?: number;
+    page?: number;
+    sortOrder?: "asc" | "desc";
+  } = {},
+): Promise<DepositRequestListResponseDto> {
+  return apiGet(
+    `/vaults/${chainId}/${mTokenAddress}/deposit-requests${buildQuery({
       status: opts.status,
       user: opts.user,
       limit: opts.limit ?? 10,

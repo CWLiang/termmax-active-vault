@@ -192,4 +192,31 @@ export const manageableVaultAbi = [
     ],
     outputs: [],
   },
+  {
+    type: "function",
+    name: "safeApproveRequest",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "uint256", name: "requestId" },
+      { type: "uint256", name: "newMTokenRate" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "approveRequest",
+    stateMutability: "nonpayable",
+    inputs: [
+      { type: "uint256", name: "requestId" },
+      { type: "uint256", name: "newMTokenRate" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "rejectRequest",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "requestId" }],
+    outputs: [],
+  },
 ] as const;
