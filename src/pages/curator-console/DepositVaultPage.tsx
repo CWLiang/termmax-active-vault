@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ import {
 } from "wagmi";
 import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
 import { useVaultDetailQuery } from "@/hooks/queries/useVaultDetailQuery";
+import { useDepositRequestsQuery } from "@/hooks/queries/useDepositRequestsQuery";
 import { manageableVaultAbi } from "@/abis/manageableVault";
 import { mTokenAbi } from "@/abis/mToken";
 import { erc20Abi } from "@/abis/erc20";
@@ -52,6 +54,8 @@ import {
 } from "@/lib/curatorManageableVaultFormat";
 import { AlertTriangle } from "lucide-react";
 
+const CURRENT_NAV_FALLBACK = "1.1162";
+
 type PendingManageableCall = {
   functionName:
     | "setTokensReceiver"
@@ -76,6 +80,11 @@ export default function DepositVaultPage() {
     valid ? chainId : undefined,
     valid ? mTokenAddress : undefined,
   );
+  const {
+    data: depositRequestsRes,
+    isLoading: depositRequestsLoading,
+    isError: depositRequestsError,
+  } = useDepositRequestsQuery(valid ? chainId : undefined, valid ? mTokenAddress : undefined);
   const vaultAddress = vaultDetail?.depositVaultAddress;
   const mToken = isAddress(mTokenAddress) ? mTokenAddress : undefined;
 
@@ -294,6 +303,42 @@ export default function DepositVaultPage() {
     ],
     [feeReceiver, tokensReceiver],
   );
+  const pendingRequests = useMemo(() => {
+    const rows = depositRequestsRes?.items ?? [];
+    return rows.map((r) => {
+      const parsedAmount = Number(r.amountToken);
+      const amount =
+        Number.isFinite(parsedAmount)
+          ? formatDisplayNumber(parsedAmount, { maximumFractionDigits: 6 })
+          : r.amountToken;
+      const date = r.createdAt.includes("T") ? r.createdAt.slice(0, 10) : r.createdAt;
+      return {
+        id: r.requestId,
+        address: shortAddr(r.sender),
+        amount,
+        date,
+      };
+    });
+  }, [depositRequestsRes]);
+  const pendingRequestCount = depositRequestsRes?.totalItems ?? 0;
+  const [selected, setSelected] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [rateModalOpen, setRateModalOpen] = useState(false);
+  const [rateModalAction, setRateModalAction] = useState("");
+  const [rateModalLabel, setRateModalLabel] = useState("");
+  const initialNav = vaultDetail?.navPerShare ? String(vaultDetail.navPerShare) : CURRENT_NAV_FALLBACK;
+  const [newRate, setNewRate] = useState(initialNav);
+  const [rateModalBaselineNav, setRateModalBaselineNav] = useState(initialNav);
+  useEffect(() => {
+    const fallback = vaultDetail?.navPerShare ? String(vaultDetail.navPerShare) : CURRENT_NAV_FALLBACK;
+    setRateModalBaselineNav(fallback);
+    setNewRate(fallback);
+  }, [vaultDetail?.navPerShare]);
+  useEffect(() => {
+    const idSet = new Set(pendingRequests.map((r) => r.id));
+    setSelected((prev) => prev.filter((id) => idSet.has(id)));
+    setExpanded((prev) => (prev != null && idSet.has(prev) ? prev : null));
+  }, [pendingRequests]);
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState("");
@@ -510,6 +555,19 @@ export default function DepositVaultPage() {
         ? paymentTokenEditAllowanceCanContinue
         : false;
 
+  const rateModalCanSubmit = useMemo(() => {
+    return newRate.trim() !== rateModalBaselineNav.trim();
+  }, [newRate, rateModalBaselineNav]);
+
+  const toggleSelect = (id: string) => {
+    setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  };
+
+  const selectAll = () => {
+    if (selected.length === pendingRequests.length) setSelected([]);
+    else setSelected(pendingRequests.map((r) => r.id));
+  };
+
   const openConfirm = (
     action: string,
     value?: string,
@@ -676,6 +734,20 @@ export default function DepositVaultPage() {
       hasRows ? valueRows : null,
       valueLabel,
     );
+  };
+
+  const openRateModal = (action: string, label: string) => {
+    const currentNav = vaultDetail?.navPerShare ? String(vaultDetail.navPerShare) : CURRENT_NAV_FALLBACK;
+    setRateModalBaselineNav(currentNav);
+    setNewRate(currentNav);
+    setRateModalAction(action);
+    setRateModalLabel(label);
+    setRateModalOpen(true);
+  };
+
+  const submitRateModal = () => {
+    setRateModalOpen(false);
+    openConfirm(rateModalAction, `Rate: $${newRate}`);
   };
 
   const handleSaveInstantSettings = () => {
@@ -985,6 +1057,8 @@ export default function DepositVaultPage() {
     }
   };
 
+  const selectedIds = selected.length > 0 ? `#${selected.join(", #")}` : "";
+
   return (
     <div className="p-6 space-y-6 max-w-5xl">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -994,7 +1068,13 @@ export default function DepositVaultPage() {
 
       <Card className="bg-card border-border">
         <CardContent className="pt-5 space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+            <div>
+              <span className="text-xs text-muted-foreground">Pending Requests</span>
+              <div className="font-mono font-bold text-foreground text-lg">
+                {depositRequestsLoading ? "…" : pendingRequestCount}
+              </div>
+            </div>
             <div>
               <span className="text-xs text-muted-foreground">Total Supply</span>
               <div className="font-mono font-bold text-foreground text-lg">
@@ -1029,6 +1109,133 @@ export default function DepositVaultPage() {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between flex-wrap gap-2">
+          <CardTitle className="font-display text-sm">Pending Requests</CardTitle>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              size="sm"
+              className="text-xs"
+              disabled={selected.length === 0}
+              onClick={() => openConfirm(`Bulk Approve at Oracle NAV (${selectedIds})`, `Rate: $${rateModalBaselineNav}`)}
+            >
+              Bulk Approve
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs"
+              disabled={selected.length === 0}
+              onClick={() => openConfirm(`Bulk Approve at Saved Rate (${selectedIds})`)}
+            >
+              Bulk Approve at Saved Rate
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs"
+              disabled={selected.length === 0}
+              onClick={() => openRateModal(`Bulk Approve at New Rate (${selectedIds})`, "Bulk Approve at New Rate")}
+            >
+              Bulk Approve at New Rate
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-xs text-muted-foreground">
+                <th className="py-2 w-8">
+                  <Checkbox
+                    checked={selected.length === pendingRequests.length && pendingRequests.length > 0}
+                    onCheckedChange={selectAll}
+                  />
+                </th>
+                <th className="text-left py-2 font-medium">#</th>
+                <th className="text-left py-2 font-medium">Address</th>
+                <th className="text-right py-2 font-medium">Amount ({mTokenSymbol ?? "mToken"})</th>
+                <th className="text-right py-2 font-medium">Requested At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingRequests.map((r) => (
+                <>{/* eslint-disable-next-line react/jsx-key */}
+                  <tr
+                    key={r.id}
+                    className="border-b border-border/50 cursor-pointer hover:bg-secondary/30"
+                    onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+                  >
+                    <td className="py-2" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox checked={selected.includes(r.id)} onCheckedChange={() => toggleSelect(r.id)} />
+                    </td>
+                    <td className="py-2 font-mono">#{r.id}</td>
+                    <td className="py-2 font-mono">{r.address}</td>
+                    <td className="py-2 font-mono text-right">{r.amount}</td>
+                    <td className="py-2 font-mono text-right text-muted-foreground">{r.date}</td>
+                  </tr>
+                  {expanded === r.id ? (
+                    <tr key={`${r.id}-actions`}>
+                      <td colSpan={5} className="py-3 px-4 bg-secondary/20">
+                        <div className="flex gap-2 flex-wrap">
+                          <Button
+                            size="sm"
+                            className="text-xs"
+                            onClick={() => openRateModal(`Safe Approve #${r.id} with New Rate`, `Safe Approve #${r.id}`)}
+                          >
+                            Safe Approve with New Rate
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs"
+                            onClick={() => openRateModal(`Approve #${r.id} with New Rate`, `Approve #${r.id}`)}
+                          >
+                            Approve with New Rate
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="text-xs"
+                            onClick={() => openConfirm(`Reject #${r.id}`)}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                        <div className="mt-2 text-[10px] text-muted-foreground space-y-0.5">
+                          <div>• <strong>Safe Approve</strong>: new rate is subject to variation tolerance check</div>
+                          <div>• <strong>Approve</strong>: new rate bypasses variation check</div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </>
+              ))}
+              {!depositRequestsLoading && !depositRequestsError && pendingRequests.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                    No pending deposit requests.
+                  </td>
+                </tr>
+              ) : null}
+              {depositRequestsLoading ? (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                    Loading pending requests...
+                  </td>
+                </tr>
+              ) : null}
+              {depositRequestsError ? (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-sm text-destructive">
+                    Failed to load pending requests.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </CardContent>
       </Card>
 
@@ -1359,6 +1566,25 @@ export default function DepositVaultPage() {
           </p>
         </CardContent>
       </Card>
+
+      <Dialog open={rateModalOpen} onOpenChange={setRateModalOpen}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="font-display">{rateModalLabel}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Deposit Rate (USD per share)</label>
+              <Input value={newRate} onChange={(e) => setNewRate(e.target.value)} className="font-mono mt-1" />
+            </div>
+            <div className="text-xs text-muted-foreground font-mono">Current Oracle NAV: ${rateModalBaselineNav}</div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRateModalOpen(false)}>Cancel</Button>
+            <Button onClick={submitRateModal} disabled={!rateModalCanSubmit}>Submit</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={walletEditOpen} onOpenChange={setWalletEditOpen}>
         <DialogContent className="bg-card border-border">

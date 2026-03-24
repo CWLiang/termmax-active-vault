@@ -130,6 +130,29 @@ export interface RedeemRequestListResponseDto {
   totalItems: number;
 }
 
+export interface DepositRequestItemDto {
+  chainId: number;
+  vaultAddress: string;
+  requestId: string;
+  status: RequestStatus;
+  sender: string;
+  tokenIn: string;
+  amountToken: string;
+  amountUsd: string;
+  fee: string;
+  tokenOutRate: string;
+  referrerId: string;
+  createdAt: string;
+  createdTxHash: string;
+}
+
+export interface DepositRequestListResponseDto {
+  items: DepositRequestItemDto[];
+  page: number;
+  totalPages: number;
+  totalItems: number;
+}
+
 export interface UserPositionDto {
   vaultId: string;
   vaultName: string;
