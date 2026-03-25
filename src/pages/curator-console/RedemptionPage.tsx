@@ -15,7 +15,16 @@ import {
   type ConfirmModalValueRow,
   type ConfirmSuccessTxRow,
 } from "@/components/curator-console/ConfirmActionModal";
-import { useAccount, useChainId, usePublicClient, useReadContract, useReadContracts, useWriteContract } from "wagmi";
+import {
+  useAccount,
+  useChainId,
+  useConnect,
+  usePublicClient,
+  useReadContract,
+  useReadContracts,
+  useSwitchChain,
+  useWriteContract,
+} from "wagmi";
 import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
 import { useVaultDetailQuery } from "@/hooks/queries/useVaultDetailQuery";
 import { useRedeemRequestsQuery } from "@/hooks/queries/useRedeemRequestsQuery";
@@ -46,12 +55,43 @@ import {
   parseInstantSettingsInputs,
 } from "@/lib/curatorManageableVaultFormat";
 
+/** On-chain `Request.mTokenRate` from `mTokenDataFeed.getDataInBase18()`. */
+const REDEEM_REQUEST_MTOKEN_RATE_DECIMALS = 18;
+
+function parseRedeemRequestMTokenRate(result: unknown): bigint | undefined {
+  if (result == null) return undefined;
+  if (Array.isArray(result) && result.length > 4) {
+    const v = result[4];
+    return typeof v === "bigint" ? v : undefined;
+  }
+  if (typeof result === "object" && result !== null && "mTokenRate" in result) {
+    const v = (result as { mTokenRate: unknown }).mTokenRate;
+    return typeof v === "bigint" ? v : undefined;
+  }
+  return undefined;
+}
+
+/** API `createdAt` → `YYYY-MM-DD HH:mm:ss UTC` for modal copy. */
+function formatRedeemRequestSubmittedAtUtc(iso: string): string {
+  const t = iso.trim();
+  if (!t) return "—";
+  try {
+    const d = new Date(t);
+    if (Number.isNaN(d.getTime())) return t;
+    return `${d.toISOString().replace("T", " ").slice(0, 19)} UTC`;
+  } catch {
+    return t;
+  }
+}
+
 const CURRENT_NAV_FALLBACK = "1.1162";
 
 export default function RedemptionPage() {
   const { address: walletAddress, isConnected } = useAccount();
   const { vault, chainId, mTokenAddress, valid } = useCuratorVaultSummary();
   const walletChainId = useChainId();
+  const { connectAsync, connectors, isPending: isRateModalConnectPending } = useConnect();
+  const { switchChain, isPending: isRateModalSwitchingChain } = useSwitchChain();
   const publicClient = usePublicClient({ chainId });
   const { mutateAsync: writeContractAsync } = useWriteContract();
   const { data: vaultDetail } = useVaultDetailQuery(valid ? chainId : undefined, valid ? mTokenAddress : undefined);
@@ -228,7 +268,14 @@ export default function RedemptionPage() {
       (tokensConfigFetching || tokenSymbolsFetching || tokenDecimalsFetching));
 
   useEffect(() => {
-    if (instantFee != null) setInstantFeeInput((Number(instantFee) / 100).toFixed(2));
+    if (instantFee != null) {
+      setInstantFeeInput(
+        formatDisplayNumber(Number(instantFee) / 100, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        }),
+      );
+    }
   }, [instantFee]);
   useEffect(() => {
     if (instantDailyLimit != null) {
@@ -251,10 +298,9 @@ export default function RedemptionPage() {
   }, [onChainVariationTolerance]);
   const walletRows = useMemo(
     () => [
-      { label: "Management Wallet", addr: tokensReceiver ? String(tokensReceiver) : undefined },
       { label: "Fee Wallet", addr: feeReceiver ? String(feeReceiver) : undefined },
     ],
-    [feeReceiver, tokensReceiver],
+    [feeReceiver],
   );
   const pendingRequests = useMemo(() => {
     const rows = redeemRequestsRes?.items ?? [];
@@ -270,10 +316,58 @@ export default function RedemptionPage() {
         address: shortAddr(r.sender),
         amount,
         date,
+        submittedAtUtc: formatRedeemRequestSubmittedAtUtc(r.createdAt),
       };
     });
   }, [redeemRequestsRes]);
   const pendingRequestCount = redeemRequestsRes?.totalItems ?? 0;
+
+  const redeemRequestReadContracts = useMemo(
+    () =>
+      !vaultAddress || pendingRequests.length === 0
+        ? []
+        : pendingRequests.map((r) => ({
+            address: vaultAddress as `0x${string}`,
+            abi: manageableVaultAbi,
+            functionName: "redeemRequests" as const,
+            args: [BigInt(r.id)] as const,
+            chainId,
+          })),
+    [vaultAddress, pendingRequests, chainId],
+  );
+
+  const {
+    data: redeemRequestsOnChainBatch,
+    isFetching: redeemRequestsOnChainFetching,
+  } = useReadContracts({
+    contracts: redeemRequestReadContracts,
+    query: {
+      enabled: Boolean(chainId && vaultAddress && redeemRequestReadContracts.length > 0),
+    },
+  });
+
+  const requestedPriceByRequestId = useMemo(() => {
+    const m = new Map<string, string>();
+    pendingRequests.forEach((r, i) => {
+      const entry = redeemRequestsOnChainBatch?.[i];
+      const raw = readContractsSuccessResult<unknown>(entry);
+      const rate = parseRedeemRequestMTokenRate(raw);
+      if (rate == null) {
+        m.set(r.id, "—");
+        return;
+      }
+      const n = Number(formatUnits(rate, REDEEM_REQUEST_MTOKEN_RATE_DECIMALS));
+      if (!Number.isFinite(n)) {
+        m.set(r.id, "—");
+        return;
+      }
+      m.set(
+        r.id,
+        `$${formatDisplayNumber(n, { minimumFractionDigits: 0, maximumFractionDigits: 6 })}`,
+      );
+    });
+    return m;
+  }, [pendingRequests, redeemRequestsOnChainBatch]);
   const [selected, setSelected] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   useEffect(() => {
@@ -340,7 +434,6 @@ export default function RedemptionPage() {
   const [rateModalLabel, setRateModalLabel] = useState("");
   const [currentOracleNav, setCurrentOracleNav] = useState(CURRENT_NAV_FALLBACK);
   const [newRate, setNewRate] = useState(CURRENT_NAV_FALLBACK);
-  const [rateModalBaselineNav, setRateModalBaselineNav] = useState(CURRENT_NAV_FALLBACK);
   const [rateModalBulkMode, setRateModalBulkMode] = useState<"bulk-new-rate" | null>(null);
   const [rateModalSingleMode, setRateModalSingleMode] = useState<"single-safe" | "single-approve" | null>(
     null,
@@ -561,8 +654,34 @@ export default function RedemptionPage() {
         : false;
 
   const rateModalCanSubmit = useMemo(() => {
-    return newRate.trim() !== rateModalBaselineNav.trim();
-  }, [newRate, rateModalBaselineNav]);
+    const t = stripNumberGrouping(newRate).trim();
+    if (!t) return false;
+    try {
+      return parseUnits(t, 18) > 0n;
+    } catch {
+      return false;
+    }
+  }, [newRate]);
+
+  /** Single-request rate modal: saved `mTokenRate` + submit time (bulk custom price uses confirm-style rows only). */
+  const rateModalSingleRequestedContent = useMemo(() => {
+    if (!rateModalSingleMode || !rateModalRequestId) return null;
+    const submittedAt =
+      pendingRequests.find((p) => p.id === rateModalRequestId)?.submittedAtUtc ?? "—";
+    return {
+      id: rateModalRequestId,
+      submittedAt,
+      display: redeemRequestsOnChainFetching
+        ? "…"
+        : (requestedPriceByRequestId.get(rateModalRequestId) ?? "—"),
+    };
+  }, [
+    rateModalSingleMode,
+    rateModalRequestId,
+    pendingRequests,
+    requestedPriceByRequestId,
+    redeemRequestsOnChainFetching,
+  ]);
 
   const toggleSelect = (id: string) => {
     setSelected((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]);
@@ -740,11 +859,31 @@ export default function RedemptionPage() {
   };
 
   const openRateModal = (action: string, label: string) => {
-    setRateModalBaselineNav(currentOracleNav);
     setNewRate(currentOracleNav);
     setRateModalAction(action);
     setRateModalLabel(label);
     setRateModalOpen(true);
+  };
+
+  const rateModalWrongChain =
+    isConnected &&
+    typeof chainId === "number" &&
+    Number.isFinite(chainId) &&
+    walletChainId !== chainId;
+
+  const handleRateModalConnectWallet = async () => {
+    const connector = connectors[0];
+    if (!connector) {
+      toast.error("No wallet connector available.");
+      return;
+    }
+    try {
+      await connectAsync({ connector });
+      toast.success("Wallet connected");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to connect wallet";
+      toast.error(msg.length > 140 ? `${msg.slice(0, 140)}…` : msg);
+    }
   };
 
   const submitRateModal = () => {
@@ -768,7 +907,7 @@ export default function RedemptionPage() {
       }
       const isSafe = rateModalSingleMode === "single-safe";
       queueVaultCall(
-        `${isSafe ? "Safe Approve" : "Approve"} #${rateModalRequestId} with New Rate`,
+        `${isSafe ? "Safe Approve" : "Approve"} #${rateModalRequestId} with Custom Price`,
         formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
           minimumFractionDigits: 0,
           maximumFractionDigits: 6,
@@ -779,7 +918,7 @@ export default function RedemptionPage() {
         `${isSafe ? "safeApproveRequest" : "approveRequest"}(${requestId.toString()}, ${newRateRaw.toString()})`,
         true,
         null,
-        "New Rate",
+        "Custom Price",
       );
       setRateModalSingleMode(null);
       setRateModalRequestId(null);
@@ -809,19 +948,29 @@ export default function RedemptionPage() {
         toast.error("New rate must be greater than 0.");
         return;
       }
+      const redemptionPriceHuman = formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 6,
+      });
       queueVaultCall(
-        `Bulk Approve at New Rate (#${selected.join(", #")})`,
-        `${selected.length} requests at rate ${formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 6,
-        })}`,
+        `Batch Approve at Custom Price (${selectedIds})`,
+        "",
         "safeBulkApproveRequest",
         [requestIds, newRateRaw],
-        "Bulk approve at new rate submitted",
+        "Batch approve at new price submitted",
         `safeBulkApproveRequest([${requestIds.map((v) => v.toString()).join(", ")}], ${newRateRaw.toString()})`,
         true,
-        null,
-        "New Rate",
+        [
+          { label: "Current Price", value: `$${currentOracleNav}` },
+          {
+            label: "Number of Requests",
+            value: `${selected.length} request${selected.length !== 1 ? "s" : ""}`,
+          },
+          {
+            label: `Redemption Price (USD per ${mTokenSymbol ?? "mToken"})`,
+            value: `$${redemptionPriceHuman}`,
+          },
+        ],
       );
       setRateModalBulkMode(null);
       return;
@@ -1030,10 +1179,10 @@ export default function RedemptionPage() {
         setInstantFee: "Set Instant Fee Tx",
         setInstantDailyLimit: "Set Instant Daily Limit Tx",
         setVariationTolerance: "Set Variation Tolerance Tx",
-        safeBulkApproveRequestAtSavedRate: "Bulk Approve at Saved Rate Tx",
-        safeBulkApproveRequest: "Bulk Approve Tx",
-        safeApproveRequest: "Safe Approve with New Rate Tx",
-        approveRequest: "Approve with New Rate Tx",
+        safeBulkApproveRequestAtSavedRate: "Batch Approve at Requested Price Tx",
+        safeBulkApproveRequest: "Batch Approve at Current Price Tx",
+        safeApproveRequest: "Safe Approve with Custom Price Tx",
+        approveRequest: "Approve with Custom Price Tx",
         rejectRequest: "Reject Request Tx",
         changeTokenFee: "Change Payment Token Fee Tx",
         changeTokenAllowance: "Change Payment Token Allowance Tx",
@@ -1108,7 +1257,6 @@ export default function RedemptionPage() {
     <div className="p-6 space-y-6 max-w-5xl">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-display font-bold text-foreground">Redemption Management</h1>
-        {vault && <p className="text-sm text-muted-foreground mt-1 font-mono">{vault.name}</p>}
       </motion.div>
 
       {/* Overview */}
@@ -1122,19 +1270,19 @@ export default function RedemptionPage() {
               </div>
             </div>
             <div>
-              <span className="text-xs text-muted-foreground">Total Supply</span>
+              <span className="text-xs text-muted-foreground">Total Issuance</span>
               <div className="font-mono font-bold text-foreground text-lg">
                 {formatAmount(mTokenSupply, mTokenDecimals != null ? Number(mTokenDecimals) : undefined)} {mTokenSymbol ?? "mToken"}
               </div>
             </div>
             <div>
-              <span className="text-xs text-muted-foreground">Instant Daily Limit</span>
+              <span className="text-xs text-muted-foreground">Daily Redemption Limit</span>
               <div className="font-mono text-sm text-foreground">
                 {formatAmount(instantDailyLimit, mTokenDecimals != null ? Number(mTokenDecimals) : undefined)} {mTokenSymbol ?? "mToken"}
               </div>
             </div>
             <div>
-              <span className="text-xs text-muted-foreground">Instant Fee</span>
+              <span className="text-xs text-muted-foreground">Instant Redemption Fee</span>
               <div className="font-mono text-sm text-foreground">{formatFeePercent(instantFee)}</div>
             </div>
           </div>
@@ -1157,18 +1305,23 @@ export default function RedemptionPage() {
                   requestIds.push(BigInt(id));
                 }
                 queueVaultCall(
-                  `Bulk Approve at Oracle NAV (${selectedIds})`,
-                  `${selected.length} requests`,
+                  `Batch Approve at Current Price (${selectedIds})`,
+                  "",
                   "safeBulkApproveRequest",
                   [requestIds],
-                  "Bulk approve submitted",
+                  "Batch approve at current price submitted",
                   `safeBulkApproveRequest([${requestIds.map((v) => v.toString()).join(", ")}])`,
                   true,
-                  null,
-                  "Requests",
+                  [
+                    { label: "Current Price", value: `$${currentOracleNav}` },
+                    {
+                      label: "Number of Requests",
+                      value: `${selected.length} request${selected.length !== 1 ? "s" : ""}`,
+                    },
+                  ],
                 );
               }}>
-              Bulk Approve
+              Batch Approve at Current Price
             </Button>
             <Button size="sm" variant="outline" className="text-xs" disabled={selected.length === 0}
               onClick={() => {
@@ -1181,27 +1334,32 @@ export default function RedemptionPage() {
                   requestIds.push(BigInt(id));
                 }
                 queueVaultCall(
-                  `Bulk Approve at Saved Rate (${selectedIds})`,
-                  `${selected.length} requests`,
+                  `Batch Approve at Requested Price (${selectedIds})`,
+                  "",
                   "safeBulkApproveRequestAtSavedRate",
                   [requestIds],
-                  "Bulk approve at saved rate submitted",
+                  "Batch approve at requested price submitted",
                   `safeBulkApproveRequestAtSavedRate([${requestIds.map((v) => v.toString()).join(", ")}])`,
                   true,
-                  null,
-                  "Requests",
+                  [
+                    { label: "Current Price", value: `$${currentOracleNav}` },
+                    {
+                      label: "Number of Requests",
+                      value: `${selected.length} request${selected.length !== 1 ? "s" : ""}`,
+                    },
+                  ],
                 );
               }}>
-              Bulk Approve at Saved Rate
+              Batch Approve at Requested Price
             </Button>
             <Button size="sm" variant="outline" className="text-xs" disabled={selected.length === 0}
               onClick={() => {
                 setRateModalBulkMode("bulk-new-rate");
                 setRateModalSingleMode(null);
                 setRateModalRequestId(null);
-                openRateModal(`Bulk Approve at New Rate (${selectedIds})`, "Bulk Approve at New Rate");
+                openRateModal(`Batch Approve at Custom Price (${selectedIds})`, "Batch Approve at Custom Price");
               }}>
-              Bulk Approve at New Rate
+              Batch Approve at Custom Price
             </Button>
           </div>
         </CardHeader>
@@ -1218,6 +1376,7 @@ export default function RedemptionPage() {
                 <th className="text-left py-2 font-medium">#</th>
                 <th className="text-left py-2 font-medium">Address</th>
                 <th className="text-right py-2 font-medium">Amount ({mTokenSymbol ?? "mToken"})</th>
+                <th className="text-right py-2 font-medium">Requested Price</th>
                 <th className="text-right py-2 font-medium">Requested At</th>
               </tr>
             </thead>
@@ -1232,27 +1391,38 @@ export default function RedemptionPage() {
                     <td className="py-2 font-mono">#{r.id}</td>
                     <td className="py-2 font-mono">{r.address}</td>
                     <td className="py-2 font-mono text-right">{r.amount}</td>
+                    <td className="py-2 font-mono text-right">
+                      {redeemRequestsOnChainFetching
+                        ? "…"
+                        : (requestedPriceByRequestId.get(r.id) ?? "—")}
+                    </td>
                     <td className="py-2 font-mono text-right text-muted-foreground">{r.date}</td>
                   </tr>
                   {expanded === r.id && (
                     <tr key={`${r.id}-actions`}>
-                      <td colSpan={5} className="py-3 px-4 bg-secondary/20">
+                      <td colSpan={6} className="py-3 px-4 bg-secondary/20">
                         <div className="flex gap-2 flex-wrap">
                           <Button size="sm" className="text-xs"
                             onClick={() => {
                               setRateModalSingleMode("single-safe");
                               setRateModalRequestId(r.id);
-                              openRateModal(`Safe Approve #${r.id} with New Rate`, `Safe Approve #${r.id}`);
+                              openRateModal(
+                                `Safe Approve #${r.id} with Custom Price`,
+                                `Safe Approve Request with Price Tolerance Check #${r.id}`,
+                              );
                             }}>
-                            Safe Approve with New Rate
+                            Safe Approve with Custom Price
                           </Button>
                           <Button size="sm" variant="outline" className="text-xs"
                             onClick={() => {
                               setRateModalSingleMode("single-approve");
                               setRateModalRequestId(r.id);
-                              openRateModal(`Approve #${r.id} with New Rate`, `Approve #${r.id}`);
+                              openRateModal(
+                                `Approve #${r.id} with Custom Price`,
+                                `Approve Request without Price Tolerance Check #${r.id}`,
+                              );
                             }}>
-                            Approve with New Rate
+                            Approve with Custom Price
                           </Button>
                           <Button size="sm" variant="destructive" className="text-xs"
                             onClick={() => {
@@ -1287,21 +1457,21 @@ export default function RedemptionPage() {
               ))}
               {!redeemRequestsLoading && !redeemRequestsError && pendingRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
                     No pending redeem requests.
                   </td>
                 </tr>
               ) : null}
               {redeemRequestsLoading ? (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
                     Loading pending requests...
                   </td>
                 </tr>
               ) : null}
               {redeemRequestsError ? (
                 <tr>
-                  <td colSpan={5} className="py-6 text-center text-sm text-destructive">
+                  <td colSpan={6} className="py-6 text-center text-sm text-destructive">
                     Failed to load pending requests.
                   </td>
                 </tr>
@@ -1322,8 +1492,31 @@ export default function RedemptionPage() {
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between py-2 border-b border-border gap-4 flex-wrap">
             <div>
-              <div className="text-xs text-muted-foreground">Redemption Vault</div>
+              <div className="text-xs text-muted-foreground">Redemption Vault (Funds for Instant Redemption)</div>
               <ManageableVaultAddressWithActions addr={vaultAddress} chainId={chainId} />
+            </div>
+          </div>
+          <div className="pt-2 mt-1">
+            <div className="flex items-center justify-between py-2 border-b border-border gap-4 flex-wrap">
+              <div>
+                <div className="text-xs text-muted-foreground">Redemption Wallet (Funds for Redemption Request)</div>
+                <ManageableVaultAddressWithActions addr={requestRedeemer ? String(requestRedeemer) : undefined} chainId={chainId} />
+              </div>
+              <div className="flex items-center gap-3">
+                {requestRedeemer ? (
+                  <a href={`https://debank.com/profile/${String(requestRedeemer)}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View on DeBank ↗</a>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-xs"
+                  onClick={() => openWalletEdit("redeemer", requestRedeemer ? String(requestRedeemer) : undefined)}
+                >
+                  Change Address
+                </Button>
+              </div>
             </div>
           </div>
           {walletRows.map((w, i) => (
@@ -1349,30 +1542,6 @@ export default function RedemptionPage() {
               </div>
             </div>
           ))}
-
-          <div className="pt-2 mt-1">
-            <div className="flex items-center justify-between py-2 gap-4 flex-wrap">
-              <div>
-                <div className="text-xs text-muted-foreground">Redeemer Wallet</div>
-                <ManageableVaultAddressWithActions addr={requestRedeemer ? String(requestRedeemer) : undefined} chainId={chainId} />
-              </div>
-              <div className="flex items-center gap-3">
-                {requestRedeemer ? (
-                  <a href={`https://debank.com/profile/${String(requestRedeemer)}`} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">View on DeBank ↗</a>
-                ) : (
-                  <span className="text-xs text-muted-foreground">—</span>
-                )}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs"
-                  onClick={() => openWalletEdit("redeemer", requestRedeemer ? String(requestRedeemer) : undefined)}
-                >
-                  Change Address
-                </Button>
-              </div>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
@@ -1382,7 +1551,7 @@ export default function RedemptionPage() {
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-muted-foreground">Instant Fee (%)</label>
+              <label className="text-xs text-muted-foreground">Instant Redemption Fee (%)</label>
               <Input
                 value={instantFeeInput}
                 onChange={(e) => setInstantFeeInput(formatNumberInputWithGrouping(e.target.value))}
@@ -1390,7 +1559,9 @@ export default function RedemptionPage() {
               />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground">Instant Daily Limit ({mTokenSymbol ?? "mToken"})</label>
+              <label className="text-xs text-muted-foreground">
+                Daily Redemption Limit ({mTokenSymbol ?? "mToken"})
+              </label>
               <Input
                 value={instantDailyLimitInput}
                 onChange={(e) => setInstantDailyLimitInput(formatNumberInputWithGrouping(e.target.value))}
@@ -1418,10 +1589,9 @@ export default function RedemptionPage() {
 
       {/* Variation Tolerance */}
       <Card className="bg-card border-border">
-        <CardHeader className="pb-3"><CardTitle className="font-display text-sm">Variation Tolerance</CardTitle></CardHeader>
+        <CardHeader className="pb-3"><CardTitle className="font-display text-sm">Price Variation Tolerance (%)</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <label className="text-xs text-muted-foreground">Safe Approval Tolerance (%)</label>
             <Input
               value={variationToleranceInput}
               onChange={(e) => setVariationToleranceInput(formatNumberInputWithGrouping(e.target.value))}
@@ -1634,7 +1804,7 @@ export default function RedemptionPage() {
         </CardContent>
       </Card>
 
-      {/* New Rate Modal */}
+      {/* Custom price rate modal */}
       <Dialog
         open={rateModalOpen}
         onOpenChange={(open) => {
@@ -1644,14 +1814,71 @@ export default function RedemptionPage() {
       >
         <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="font-display">{rateModalLabel}</DialogTitle>
+            <DialogTitle className="font-display">
+              {rateModalBulkMode === "bulk-new-rate" ? "Confirm Action" : rateModalLabel}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Redemption Rate (USD per share)</label>
-              <Input value={newRate} onChange={(e) => setNewRate(e.target.value)} className="font-mono mt-1" />
-            </div>
-            <div className="text-xs text-muted-foreground font-mono">Current Oracle NAV: ${currentOracleNav}</div>
+          <div className="space-y-3 text-sm">
+            {rateModalBulkMode === "bulk-new-rate" ? (
+              <>
+                <div className="space-y-1">
+                  <div className="flex justify-between gap-2 items-start">
+                    <span className="text-muted-foreground shrink-0 pt-0.5">Action</span>
+                    <span className="text-foreground text-right break-words min-w-0 max-w-[min(100%,20rem)] leading-snug">
+                      Batch Approve at Custom Price ({selectedIds})
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between gap-2 items-start">
+                    <span className="text-muted-foreground shrink-0 pt-0.5">Current Price</span>
+                    <span className="text-foreground text-right break-words min-w-0 max-w-[min(100%,20rem)] leading-snug whitespace-pre-line font-mono">
+                      ${currentOracleNav}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-2 items-start">
+                    <span className="text-muted-foreground shrink-0 pt-0.5">Number of Requests</span>
+                    <span className="text-foreground text-right break-words min-w-0 max-w-[min(100%,20rem)] leading-snug whitespace-pre-line">
+                      {selected.length} request{selected.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between gap-2 items-center">
+                    <span className="text-muted-foreground shrink-0 pt-0.5">
+                      Redemption Price (USD per {mTokenSymbol ?? "mToken"})
+                    </span>
+                    <Input
+                      value={newRate}
+                      onChange={(e) => setNewRate(e.target.value)}
+                      className="font-mono h-9 max-w-[min(100%,20rem)] min-w-[10rem] w-full text-right"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-xs text-muted-foreground font-mono">
+                  Current Price: ${currentOracleNav}
+                </div>
+                {rateModalSingleRequestedContent ? (
+                  <div className="rounded-md border border-border bg-muted/30 px-3 py-2.5 space-y-1.5">
+                    <div className="text-xs text-muted-foreground font-medium">
+                      Requested price at {rateModalSingleRequestedContent.submittedAt}
+                    </div>
+                    <div className="text-sm font-mono text-foreground">
+                      #{rateModalSingleRequestedContent.id}: {rateModalSingleRequestedContent.display}
+                    </div>
+                  </div>
+                ) : null}
+                <div>
+                  <label className="text-xs text-muted-foreground">
+                    Redemption Price (USD per {mTokenSymbol ?? "mToken"})
+                  </label>
+                  <Input value={newRate} onChange={(e) => setNewRate(e.target.value)} className="font-mono mt-1" />
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -1663,9 +1890,22 @@ export default function RedemptionPage() {
             >
               Cancel
             </Button>
-            <Button onClick={submitRateModal} disabled={!rateModalCanSubmit}>
-              Submit
-            </Button>
+            {!isConnected ? (
+              <Button onClick={() => void handleRateModalConnectWallet()} disabled={isRateModalConnectPending}>
+                {isRateModalConnectPending ? "Connecting…" : "Connect wallet"}
+              </Button>
+            ) : rateModalWrongChain ? (
+              <Button
+                onClick={() => switchChain({ chainId: chainId! })}
+                disabled={isRateModalSwitchingChain}
+              >
+                {isRateModalSwitchingChain ? "Switching…" : `Switch to chain ${chainId}`}
+              </Button>
+            ) : (
+              <Button onClick={submitRateModal} disabled={!rateModalCanSubmit}>
+                Submit
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

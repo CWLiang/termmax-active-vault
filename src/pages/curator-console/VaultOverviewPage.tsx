@@ -168,6 +168,7 @@ function VaultSidePanel({
   chainId,
   vaultDetailLoading,
   vaultDetailError,
+  variant,
 }: {
   title: string;
   contractLabel: string;
@@ -175,9 +176,10 @@ function VaultSidePanel({
   chainId: number;
   vaultDetailLoading: boolean;
   vaultDetailError: boolean;
+  variant: "deposit" | "redemption";
 }) {
   const copyToast =
-    contractLabel === "Deposit vault" ? "Deposit vault address copied" : "Redemption vault address copied";
+    variant === "deposit" ? "Deposit vault address copied" : "Redemption vault address copied";
   const vaultAddress = contractAddress as Address;
   const canReadReceivers = Number.isFinite(chainId) && isAddress(contractAddress ?? "");
 
@@ -190,7 +192,7 @@ function VaultSidePanel({
     abi: manageableVaultAbi,
     functionName: "tokensReceiver",
     chainId,
-    query: { enabled: canReadReceivers },
+    query: { enabled: canReadReceivers && variant === "deposit" },
   });
 
   const {
@@ -203,6 +205,18 @@ function VaultSidePanel({
     functionName: "feeReceiver",
     chainId,
     query: { enabled: canReadReceivers },
+  });
+
+  const {
+    data: requestRedeemer,
+    isLoading: requestRedeemerLoading,
+    isError: requestRedeemerError,
+  } = useReadContract({
+    address: vaultAddress,
+    abi: manageableVaultAbi,
+    functionName: "requestRedeemer",
+    chainId,
+    query: { enabled: canReadReceivers && variant === "redemption" },
   });
 
   return (
@@ -224,13 +238,23 @@ function VaultSidePanel({
             copyToast={copyToast}
           />
         ) : null}
-        <CuratorWalletRow
-          label="Management wallet"
-          address={tokenReceiver}
-          loading={tokenReceiverLoading}
-          readError={tokenReceiverError}
-          copyToast="Management wallet address copied"
-        />
+        {variant === "deposit" ? (
+          <CuratorWalletRow
+            label="Management Wallet (Recipient of Deposited Fund)"
+            address={tokenReceiver}
+            loading={tokenReceiverLoading}
+            readError={tokenReceiverError}
+            copyToast="Management Wallet address copied"
+          />
+        ) : (
+          <CuratorWalletRow
+            label="Redemption Wallet (Funds for Redemption Request)"
+            address={requestRedeemer ? String(requestRedeemer) : undefined}
+            loading={requestRedeemerLoading}
+            readError={requestRedeemerError}
+            copyToast="Redemption Wallet address copied"
+          />
+        )}
         <CuratorWalletRow
           label="Fee wallet"
           address={feeReceiver}
@@ -430,7 +454,7 @@ export default function VaultOverviewPage() {
           <Card className="bg-card border-border">
             <CardContent className="pt-4 pb-4">
               <div className="text-xs text-muted-foreground">
-                Total Supply / Capacity ({mTokenSymbol ?? "mToken"})
+                Total Issuance / Capacity ({mTokenSymbol ?? "mToken"})
               </div>
               <div className="text-xl font-mono font-bold text-foreground mt-1">
                 {mTokenSupply != null || maxSupplyCap != null ? (
@@ -457,7 +481,7 @@ export default function VaultOverviewPage() {
         </motion.div>
       </div>
 
-      {/* Deposit vs redemption: each panel = vault contract + management + fee wallets */}
+      {/* Deposit: contract + management + fee. Redemption: contract + requestRedeemer + fee */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <VaultSidePanel
           title="Deposit vault"
@@ -466,24 +490,28 @@ export default function VaultOverviewPage() {
           chainId={chainId}
           vaultDetailLoading={vaultDetailLoading}
           vaultDetailError={vaultDetailError}
+          variant="deposit"
         />
         <VaultSidePanel
           title="Redemption vault"
-          contractLabel="Redemption vault"
+          contractLabel="Redemption Vault (Funds for Instant Redeem)"
           contractAddress={vaultDetail?.redemptionVaultAddress}
           chainId={chainId}
           vaultDetailLoading={vaultDetailLoading}
           vaultDetailError={vaultDetailError}
+          variant="redemption"
         />
       </div>
 
-      {/* Token status — mToken pause / unpause (on-chain) */}
+      {/* Vault status — mToken pause / unpause (on-chain) */}
       <Card className="bg-card border-border">
-        <CardHeader className="pb-3"><CardTitle className="font-display text-sm">Token Status</CardTitle></CardHeader>
+        <CardHeader className="pb-3"><CardTitle className="font-display text-sm">Vault Status</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4 pb-4 border-b border-border">
             <div className="min-w-0 flex-1">
-              <div className="text-xs text-muted-foreground mb-1">mToken contract</div>
+              <div className="text-xs text-muted-foreground mb-1">
+                {mTokenSymbol ?? "mToken"} contract
+              </div>
               <div className="flex items-start gap-2 flex-wrap">
                 <span
                   className="text-sm font-mono text-foreground break-all leading-snug"
@@ -495,11 +523,11 @@ export default function VaultOverviewPage() {
                   <div className="flex items-center gap-1 shrink-0 pt-0.5">
                     <button
                       type="button"
-                      aria-label="Copy mToken address"
+                      aria-label={`Copy ${mTokenSymbol ?? "mToken"} address`}
                       className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
                       onClick={() => {
                         void navigator.clipboard.writeText(mTokenAddress);
-                        toast.success("mToken address copied");
+                        toast.success(`${mTokenSymbol ?? "mToken"} address copied`);
                       }}
                     >
                       <Copy className="h-3.5 w-3.5" />
@@ -508,7 +536,7 @@ export default function VaultOverviewPage() {
                       href={explorer}
                       target="_blank"
                       rel="noreferrer"
-                      aria-label="View mToken on block explorer"
+                      aria-label={`View ${mTokenSymbol ?? "mToken"} on block explorer`}
                       className="rounded-md p-1 text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors inline-flex"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />

@@ -35,7 +35,7 @@ import {
 import { formatUnits, isAddress, parseUnits, type Address, zeroAddress } from "viem";
 import { toast } from "sonner";
 import { normalizeVaultAddress } from "@/lib/evmAddress";
-import { getExplorerAddressUrl, getExplorerTxUrl } from "@/lib/explorer";
+import { getExplorerAddressUrl } from "@/lib/explorer";
 import { readAggregatorLatestNav } from "@/lib/readAggregatorLatestNav";
 import { supportedWagmiChainIds } from "@/lib/wagmi";
 import { manageableVaultAbi } from "@/abis/manageableVault";
@@ -48,12 +48,9 @@ import { useWalletChainGate } from "@/hooks/useWalletChainGate";
 import { WalletChainGateOrActions } from "@/components/wallet/WalletChainGateOrActions";
 import { showConfirmModalContractDetails } from "@/lib/confirm-modal-env";
 import { formatBigIntIntegerForDisplay, formatDisplayNumber } from "@/lib/formatNumbers";
+import { cn } from "@/lib/utils";
 
 const EMPTY_FEED = { healthyDiffSeconds: "", minPriceHuman: "", maxPriceHuman: "" };
-
-function shortAddr(a: string) {
-  return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
-}
 
 /** Strip trailing zeros from a decimal string (e.g. "1.010000" → "1.01"). */
 function trimDecimalZeros(s: string): string {
@@ -175,8 +172,10 @@ function OnChainAddressRow({
   );
 }
 
-/** Default rows shown in NAV update history table (newest first). */
-const NAV_HISTORY_TABLE_PREVIEW = 5;
+/** Initial NAV history rows (newest first); more load via scroll. */
+const NAV_HISTORY_INITIAL_ROWS = 5;
+/** Rows appended each time the scroll sentinel enters view. */
+const NAV_HISTORY_PAGE_SIZE = 40;
 
 type ChainNavSnapshot = {
   nav: number;
@@ -228,6 +227,9 @@ export default function NAVManagementPage() {
   const [chainNavSnapshot, setChainNavSnapshot] = useState<ChainNavSnapshot | null>(null);
   const [onChainNavLoading, setOnChainNavLoading] = useState(false);
   const [localNavTxLog, setLocalNavTxLog] = useState<NavHistoryRow[]>([]);
+  const [navHistoryRenderCount, setNavHistoryRenderCount] = useState(NAV_HISTORY_INITIAL_ROWS);
+  const navHistoryScrollRootRef = useRef<HTMLDivElement>(null);
+  const navHistorySentinelRef = useRef<HTMLTableRowElement>(null);
   /** Multi-step DataFeed confirm: current/total for modal progress UI. */
   const [feedBatchProgress, setFeedBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const [confirmSuccessTxRows, setConfirmSuccessTxRows] = useState<ConfirmSuccessTxRow[]>([]);
@@ -539,10 +541,46 @@ export default function NAVManagementPage() {
     return [...localNavTxLog, ...historyTableRows];
   }, [localNavTxLog, historyTableRows]);
 
-  const visibleNavHistoryRows = useMemo(
-    () => mergedHistoryRows.slice(0, NAV_HISTORY_TABLE_PREVIEW),
-    [mergedHistoryRows],
-  );
+  const navHistoryTotal = mergedHistoryRows.length;
+
+  useEffect(() => {
+    setNavHistoryRenderCount((c) => {
+      if (navHistoryTotal === 0) return NAV_HISTORY_INITIAL_ROWS;
+      return Math.min(c, navHistoryTotal);
+    });
+  }, [navHistoryTotal]);
+
+  const navHistoryDisplayedRows = useMemo(() => {
+    if (navHistoryTotal === 0) return [];
+    const n = Math.min(navHistoryRenderCount, navHistoryTotal);
+    return mergedHistoryRows.slice(0, n);
+  }, [mergedHistoryRows, navHistoryRenderCount, navHistoryTotal]);
+
+  const loadMoreNavHistoryRows = useCallback(() => {
+    setNavHistoryRenderCount((c) => Math.min(c + NAV_HISTORY_PAGE_SIZE, navHistoryTotal));
+  }, [navHistoryTotal]);
+
+  useEffect(() => {
+    if (navHistoryRenderCount >= navHistoryTotal) return;
+    const root = navHistoryScrollRootRef.current;
+    const target = navHistorySentinelRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMoreNavHistoryRows();
+        }
+      },
+      { root, rootMargin: "80px 0px", threshold: 0 },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [navHistoryRenderCount, navHistoryTotal, loadMoreNavHistoryRows]);
+
+  useEffect(() => {
+    setNavHistoryRenderCount(NAV_HISTORY_INITIAL_ROWS);
+  }, [timeRange, chainId, mTokenAddress]);
 
   // DataFeed.sol — healthyDiff (seconds), min/max expected answer (aggregator raw int)
   const [healthyDiffSeconds, setHealthyDiffSeconds] = useState(EMPTY_FEED.healthyDiffSeconds);
@@ -990,22 +1028,18 @@ export default function NAVManagementPage() {
   const explorerChainId =
     valid && typeof chainId === "number" && Number.isFinite(chainId) ? chainId : null;
 
-  const dataFeedRowPlaceholder =
-    canLookupFeedFromVaults && dataFeedAddrLoading ? "Loading…" : undefined;
-
   const aggregatorRowPlaceholder = !dataFeedAddress
     ? undefined
     : aggregatorAddressLoading
       ? "Loading…"
       : !agg
-        ? "Aggregator unset or zero address"
+        ? "Oracle unset or zero address"
         : undefined;
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-display font-bold text-foreground">Price Management</h1>
-        {vault && <p className="text-sm text-muted-foreground mt-1 font-mono">{vault.name}</p>}
         {showNavError ? (
           <p className="text-xs text-destructive mt-1">Could not load vault detail — NAV may be from list only.</p>
         ) : null}
@@ -1073,15 +1107,9 @@ export default function NAVManagementPage() {
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 ON-CHAIN PRICE SOURCE
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <OnChainAddressRow
-                  label="DataFeed (mTokenDataFeed)"
-                  address={dataFeedAddress}
-                  placeholder={dataFeedRowPlaceholder}
-                  explorerChainId={explorerChainId}
-                />
-                <OnChainAddressRow
-                  label="Aggregator (price feed)"
+                  label="Oracle"
                   address={agg ? String(agg) : undefined}
                   placeholder={aggregatorRowPlaceholder}
                   explorerChainId={explorerChainId}
@@ -1109,7 +1137,7 @@ export default function NAVManagementPage() {
                       type="button"
                       className="text-[11px] text-muted-foreground cursor-help underline decoration-dotted decoration-border underline-offset-2 hover:text-foreground border-0 bg-transparent p-0 text-left font-sans shrink-0"
                     >
-                      Max NAV deviation:{" "}
+                      Max Price Deviation:{" "}
                       <span className="font-mono text-foreground tabular-nums">
                         {maxAnswerDeviationLoading
                           ? "…"
@@ -1126,18 +1154,18 @@ export default function NAVManagementPage() {
                       <p className="m-0">
                         We couldn&apos;t read this limit. The address may not be a manual TermMax-style price feed, or
                         the network request failed. You can still try <strong>Submit update</strong> or{" "}
-                        <strong>Force submit</strong>; if the feed doesn&apos;t support this check, behavior depends on
+                        <strong>Force Update</strong>; if the feed doesn&apos;t support this check, behavior depends on
                         the contract.
                       </p>
                     ) : (
                       <div className="space-y-2">
                         <p className="m-0">
-                          With <strong>Submit update</strong>, the new NAV can only move this much compared to the last
-                          NAV already stored on chain. If you go further, the transaction will be rejected.
+                          With <strong>Submit update</strong>, the new price can only move this much compared to the last
+                          price already stored on chain. If you go further, the transaction will be rejected.
                         </p>
                         <p className="m-0">
-                          Use <strong>Force submit</strong> when you intentionally need a larger step. The feed may
-                          still block values outside its own lowest and highest allowed prices.
+                          Use <strong>Force Update</strong> when you intentionally need a larger step. This action may
+                          still be blocked according to the min. and max. price settings.
                         </p>
                       </div>
                     )}
@@ -1182,15 +1210,15 @@ export default function NAVManagementPage() {
                     navSubmitValueUnchanged
                   }
                   onClick={() => void openNavConfirm("force")}
-                  title="Force submit Price update"
+                  title="Force Update (bypass variation checking)"
                 >
-                  Force submit
+                  Force Update
                 </Button>
               </div>
             </WalletChainGateOrActions>
             {navChangeExceedsMaxDeviation ? (
               <p className="text-[10px] text-destructive leading-snug">
-                New Price exceeds Max Price deviation. Use Force submit if this larger move is intentional.
+                New Price exceeds Max Price Deviation. Use Force Update if this larger move is intentional.
               </p>
             ) : null}
           </div>
@@ -1261,77 +1289,91 @@ export default function NAVManagementPage() {
               </ResponsiveContainer>
             </div>
           )}
-          <div className="mt-4 overflow-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border text-muted-foreground">
-                  <th className="text-left py-2 font-medium">Date/Time (UTC)</th>
-                  <th className="text-right py-2 font-medium">Price</th>
-                  <th className="text-right py-2 font-medium">Change</th>
-                  <th className="text-right py-2 font-medium">Updated By</th>
-                </tr>
-              </thead>
-              <tbody>
-                {navError && mergedHistoryRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-destructive">
-                      Failed to load history.
-                    </td>
+          <div className="mt-4 space-y-2">
+            {navHistoryTotal > 0 ? (
+              <p className="text-xs text-muted-foreground m-0">
+                NAV history ({navHistoryTotal} {navHistoryTotal === 1 ? "update" : "updates"}
+                {navHistoryTotal > NAV_HISTORY_INITIAL_ROWS
+                  ? ` · showing ${navHistoryDisplayedRows.length} of ${navHistoryTotal} · scroll for more`
+                  : ""}
+                )
+              </p>
+            ) : null}
+            <div
+              ref={navHistoryScrollRootRef}
+              className={cn(
+                "overflow-x-auto rounded-md border border-transparent",
+                navHistoryTotal > NAV_HISTORY_INITIAL_ROWS &&
+                  "max-h-[min(50vh,420px)] overflow-y-auto border-border",
+              )}
+            >
+              <table className="w-full text-xs">
+                <thead
+                  className={cn(
+                    navHistoryTotal > NAV_HISTORY_INITIAL_ROWS && "sticky top-0 z-[1] bg-card",
+                  )}
+                >
+                  <tr className="border-b border-border text-muted-foreground">
+                    <th className="text-left py-2 font-medium">Date/Time (UTC)</th>
+                    <th className="text-right py-2 font-medium">Price</th>
+                    <th className="text-right py-2 font-medium">Change</th>
                   </tr>
-                ) : navLoading && mergedHistoryRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-muted-foreground">
-                      Loading…
-                    </td>
-                  </tr>
-                ) : mergedHistoryRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-muted-foreground">
-                      No rows for this range.
-                    </td>
-                  </tr>
-                ) : (
-                  visibleNavHistoryRows.map((row) => (
-                    <tr key={row.key} className="border-b border-border/50">
-                      <td className="py-2 font-mono">{row.date}</td>
-                      <td className="py-2 font-mono text-right">{formatNavPrice(row.nav, 6)}</td>
-                      <td
-                        className={`py-2 font-mono text-right ${
-                          row.changePct == null
-                            ? "text-muted-foreground"
-                            : row.changePct >= 0
-                              ? "text-yield-positive"
-                              : "text-destructive"
-                        }`}
-                      >
-                        {row.changePct == null
-                          ? "—"
-                          : `${row.changePct >= 0 ? "+" : ""}${formatDisplayNumber(row.changePct, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}%`}
-                      </td>
-                      <td className="py-2 font-mono text-right">
-                        {row.txHash && explorerChainId != null ? (
-                          <a
-                            href={getExplorerTxUrl(explorerChainId, row.txHash)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary hover:underline inline-flex items-center gap-0.5 justify-end"
-                          >
-                            <span className="font-mono">{shortAddr(row.txHash)}</span>
-                            <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
-                          </a>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                </thead>
+                <tbody>
+                  {navError && navHistoryTotal === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-4 text-destructive">
+                        Failed to load history.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-            {mergedHistoryRows.length > NAV_HISTORY_TABLE_PREVIEW ? (
-              <p className="text-[10px] text-muted-foreground mt-2">
-                Showing {NAV_HISTORY_TABLE_PREVIEW} most recent of {mergedHistoryRows.length} (API + on-chain submits in
-                this session).
+                  ) : navLoading && navHistoryTotal === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-4 text-muted-foreground">
+                        Loading…
+                      </td>
+                    </tr>
+                  ) : navHistoryTotal === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="py-4 text-muted-foreground">
+                        No rows for this range.
+                      </td>
+                    </tr>
+                  ) : (
+                    <>
+                      {navHistoryDisplayedRows.map((row) => (
+                        <tr key={row.key} className="border-b border-border/50">
+                          <td className="py-2 font-mono">{row.date}</td>
+                          <td className="py-2 font-mono text-right">{formatNavPrice(row.nav, 6)}</td>
+                          <td
+                            className={`py-2 font-mono text-right ${
+                              row.changePct == null
+                                ? "text-muted-foreground"
+                                : row.changePct >= 0
+                                  ? "text-yield-positive"
+                                  : "text-destructive"
+                            }`}
+                          >
+                            {row.changePct == null
+                              ? "—"
+                              : `${row.changePct >= 0 ? "+" : ""}${formatDisplayNumber(row.changePct, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}%`}
+                          </td>
+                        </tr>
+                      ))}
+                      {navHistoryRenderCount < navHistoryTotal ? (
+                        <tr ref={navHistorySentinelRef} className="border-0">
+                          <td colSpan={3} className="py-2 h-4 text-center text-[10px] text-muted-foreground">
+                            Scroll for more…
+                          </td>
+                        </tr>
+                      ) : null}
+                    </>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {navHistoryTotal > NAV_HISTORY_INITIAL_ROWS && navHistoryRenderCount < navHistoryTotal ? (
+              <p className="text-[10px] text-muted-foreground m-0 text-center pt-1">
+                Scroll down to see more history.
               </p>
             ) : null}
           </div>
@@ -1371,20 +1413,21 @@ export default function NAVManagementPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs text-muted-foreground">
-                    healthyDiff (seconds)
+                    Max. Staleness (seconds)
                   </label>
                   <Input
                     value={healthyDiffSeconds}
                     onChange={(e) => setHealthyDiffSeconds(e.target.value)}
                     className="font-mono mt-1"
                     disabled={!dataFeedAddress}
+                    placeholder="e.g. 3600"
                   />
                   {showContractDevHints && healthyDiffSeconds !== savedFeed.healthyDiffSeconds && (
                     <span className="text-[10px] text-accent font-mono">→ setHealthyDiff(uint256)</span>
                   )}
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Min expected price (human)</label>
+                  <label className="text-xs text-muted-foreground">Min. Price</label>
                   <Input
                     value={minPriceHuman}
                     onChange={(e) => setMinPriceHuman(e.target.value)}
@@ -1409,7 +1452,7 @@ export default function NAVManagementPage() {
                   ) : null}
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Max expected price (human)</label>
+                  <label className="text-xs text-muted-foreground">Max. Price</label>
                   <Input
                     value={maxPriceHuman}
                     onChange={(e) => setMaxPriceHuman(e.target.value)}

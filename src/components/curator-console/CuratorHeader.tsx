@@ -16,20 +16,12 @@ export function CuratorHeader() {
     ? vault?.name ?? `Vault ${truncateAddr(mTokenAddress)}`
     : "Curator Console";
 
-  const subtitle =
-    vaultMatch && valid && vault
-      ? `${vault.curator} · ${vault.underlyingSymbol} · ${vault.chainId}`
-      : vaultMatch && valid
-        ? `Chain ${vaultMatch.params.chainId}`
-        : "Select a strategy vault to manage";
-
   return (
     <header className="h-14 flex items-center justify-between border-b border-border px-4 bg-background/80 backdrop-blur-sm gap-3">
       <div className="flex items-center gap-3 min-w-0">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground shrink-0" />
         <div className="min-w-0 text-left">
           <div className="font-display font-semibold text-sm text-foreground truncate">{title}</div>
-          <div className="text-[10px] text-muted-foreground font-mono truncate">{subtitle}</div>
         </div>
       </div>
 

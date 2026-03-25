@@ -788,7 +788,7 @@ export default function DepositVaultPage() {
       }
       const isSafe = rateModalSingleMode === "single-safe";
       queueVaultCall(
-        `${isSafe ? "Safe Approve" : "Approve"} #${rateModalRequestId} with New Rate`,
+        `${isSafe ? "Safe Approve" : "Approve"} #${rateModalRequestId} with Custom Price`,
         formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
           minimumFractionDigits: 0,
           maximumFractionDigits: 6,
@@ -799,7 +799,7 @@ export default function DepositVaultPage() {
         `${isSafe ? "safeApproveRequest" : "approveRequest"}(${requestId.toString()}, ${newRateRaw.toString()})`,
         true,
         null,
-        "New Rate",
+        "Custom Price",
       );
       setRateModalSingleMode(null);
       setRateModalRequestId(null);
@@ -830,7 +830,7 @@ export default function DepositVaultPage() {
         return;
       }
       queueVaultCall(
-        `Bulk Approve at New Rate (#${selected.join(", #")})`,
+        `Bulk Approve at Custom Price (#${selected.join(", #")})`,
         `${selected.length} requests at rate ${formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
           minimumFractionDigits: 0,
           maximumFractionDigits: 6,
@@ -841,7 +841,7 @@ export default function DepositVaultPage() {
         `safeBulkApproveRequest([${requestIds.map((v) => v.toString()).join(", ")}], ${newRateRaw.toString()})`,
         true,
         null,
-        "New Rate",
+        "Custom Price",
       );
       setRateModalBulkMode(null);
       return;
@@ -1065,8 +1065,8 @@ export default function DepositVaultPage() {
       setVariationTolerance: "Set Variation Tolerance Tx",
       safeBulkApproveRequestAtSavedRate: "Bulk Approve at Saved Rate Tx",
       safeBulkApproveRequest: "Bulk Approve Tx",
-      safeApproveRequest: "Safe Approve with New Rate Tx",
-      approveRequest: "Approve with New Rate Tx",
+      safeApproveRequest: "Safe Approve with Custom Price Tx",
+      approveRequest: "Approve with Custom Price Tx",
       rejectRequest: "Reject Request Tx",
       changeTokenFee: "Change Payment Token Fee Tx",
       changeTokenAllowance: "Change Payment Token Allowance Tx",
@@ -1172,7 +1172,6 @@ export default function DepositVaultPage() {
     <div className="p-6 space-y-6 max-w-5xl">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-display font-bold text-foreground">Deposit Management</h1>
-        {vault && <p className="text-sm text-muted-foreground mt-1 font-mono">{vault.name}</p>}
       </motion.div>
 
       <Card className="bg-card border-border">
@@ -1291,10 +1290,10 @@ export default function DepositVaultPage() {
                 setRateModalBulkMode("bulk-new-rate");
                 setRateModalSingleMode(null);
                 setRateModalRequestId(null);
-                openRateModal(`Bulk Approve at New Rate (${selectedIds})`, "Bulk Approve at New Rate");
+                openRateModal(`Bulk Approve at Custom Price (${selectedIds})`, "Bulk Approve at Custom Price");
               }}
             >
-              Bulk Approve at New Rate
+              Bulk Approve at Custom Price
             </Button>
           </div>
         </CardHeader>
@@ -1340,10 +1339,10 @@ export default function DepositVaultPage() {
                             onClick={() => {
                               setRateModalSingleMode("single-safe");
                               setRateModalRequestId(r.id);
-                              openRateModal(`Safe Approve #${r.id} with New Rate`, `Safe Approve #${r.id}`);
+                              openRateModal(`Safe Approve #${r.id} with Custom Price`, `Safe Approve #${r.id}`);
                             }}
                           >
-                            Safe Approve with New Rate
+                            Safe Approve with Custom Price
                           </Button>
                           <Button
                             size="sm"
@@ -1352,10 +1351,10 @@ export default function DepositVaultPage() {
                             onClick={() => {
                               setRateModalSingleMode("single-approve");
                               setRateModalRequestId(r.id);
-                              openRateModal(`Approve #${r.id} with New Rate`, `Approve #${r.id}`);
+                              openRateModal(`Approve #${r.id} with Custom Price`, `Approve #${r.id}`);
                             }}
                           >
-                            Approve with New Rate
+                            Approve with Custom Price
                           </Button>
                           <Button
                             size="sm"

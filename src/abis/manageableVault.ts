@@ -219,4 +219,19 @@ export const manageableVaultAbi = [
     inputs: [{ type: "uint256", name: "requestId" }],
     outputs: [],
   },
+  /** RedemptionVault: `mapping(uint256 => Request) public redeemRequests` */
+  {
+    type: "function",
+    name: "redeemRequests",
+    stateMutability: "view",
+    inputs: [{ type: "uint256", name: "requestId" }],
+    outputs: [
+      { type: "address", name: "sender" },
+      { type: "address", name: "tokenOut" },
+      { type: "uint8", name: "status" },
+      { type: "uint256", name: "amountMToken" },
+      { type: "uint256", name: "mTokenRate" },
+      { type: "uint256", name: "tokenOutRate" },
+    ],
+  },
 ] as const;

@@ -30,7 +30,7 @@ export default function CuratorDashboardPage() {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-display font-bold text-foreground">Strategy vaults</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Choose a vault to open curator tools (overview, price, redemption, deposit, activity).
+          Choose a vault to manage.
         </p>
       </motion.div>
 
@@ -69,7 +69,7 @@ export default function CuratorDashboardPage() {
                       </div>
                     </div>
                     <div>
-                      <span className="text-muted-foreground text-xs">Capacity</span>
+                      <span className="text-muted-foreground text-xs">Deposit Capacity</span>
                       <div className="font-mono font-semibold text-foreground">{formatUSD(capacity)}</div>
                     </div>
                   </div>

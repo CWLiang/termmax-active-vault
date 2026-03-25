@@ -4,8 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ExternalLink, Download } from "lucide-react";
-import { useCuratorVaultSummary } from "@/hooks/useCuratorVaultRoute";
-
 const logs = [
   { time: "2026-03-19 09:32", vault: "RWA Enhanced", action: "reportNAV $1.1162", by: "0x1a2b…", tx: "0xTx01…" },
   { time: "2026-03-19 08:10", vault: "T-Bill Maximizer", action: "approveRequest #1040", by: "0x1a2b…", tx: "0xTx02…" },
@@ -14,7 +12,6 @@ const logs = [
 ];
 
 export default function AuditLogPage() {
-  const { vault } = useCuratorVaultSummary();
   const [vaultFilter, setVaultFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
 
@@ -22,7 +19,6 @@ export default function AuditLogPage() {
     <div className="p-6 space-y-6 max-w-6xl">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-display font-bold text-foreground">Audit Log</h1>
-        {vault && <p className="text-sm text-muted-foreground mt-1 font-mono">{vault.name}</p>}
       </motion.div>
 
       {/* Filters */}
