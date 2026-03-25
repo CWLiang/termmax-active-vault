@@ -315,16 +315,19 @@ export default function NAVManagementPage() {
     !dataFeedAddress &&
     (depositFeedReadFailed || redeemFeedReadFailed);
 
+  const refetchDepositFeed = depositFeedRead.refetch;
+  const refetchRedeemFeed = redeemFeedRead.refetch;
+
   const refetchDataFeedAddr = useCallback(async () => {
     const ops: Promise<unknown>[] = [];
-    if (depositVaultAddress && chainSupported) ops.push(depositFeedRead.refetch());
-    if (redemptionVaultAddress && chainSupported) ops.push(redeemFeedRead.refetch());
+    if (depositVaultAddress && chainSupported) ops.push(refetchDepositFeed());
+    if (redemptionVaultAddress && chainSupported) ops.push(refetchRedeemFeed());
     await Promise.all(ops);
   }, [
     chainSupported,
-    depositFeedRead.refetch,
+    refetchDepositFeed,
     depositVaultAddress,
-    redeemFeedRead.refetch,
+    refetchRedeemFeed,
     redemptionVaultAddress,
   ]);
 
@@ -477,16 +480,14 @@ export default function NAVManagementPage() {
       setNewNav(formatNavPrice(chainNavSnapshot.nav, 6));
       return;
     }
-    const nav =
-      vaultDetail != null ? parseDecimal(vaultDetail.navPerShare) : (vault?.navPerShare ?? 0);
+    const nav = vaultDetail != null ? parseDecimal(vaultDetail.navPerShare) : (vault?.navPerShare ?? 0);
     if (nav > 0) setNewNav(formatNavPrice(nav, 6));
   }, [
-    chainNavSnapshot?.nav,
-    chainNavSnapshot?.roundId,
+    chainNavSnapshot,
     chainId,
     mTokenAddress,
-    vaultDetail?.navPerShare,
-    vault?.navPerShare,
+    vaultDetail,
+    vault,
   ]);
 
   const latestSnapshot = useMemo(() => {

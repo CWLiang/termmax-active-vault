@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,8 +32,9 @@ import { manageableVaultAbi } from "@/abis/manageableVault";
 import { mTokenAbi } from "@/abis/mToken";
 import { erc20Abi } from "@/abis/erc20";
 import { depositVaultAbi } from "@/abis/depositVault";
-import { dataFeedAbi } from "@/abis/dataFeed";
-import { formatUnits, isAddress, parseUnits } from "viem";
+import { aggregatorV3DecimalsAbi, dataFeedAbi } from "@/abis/dataFeed";
+import { readAggregatorLatestNav } from "@/lib/readAggregatorLatestNav";
+import { Address, formatUnits, isAddress, parseUnits, zeroAddress } from "viem";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastChainTxSuccess } from "@/lib/toastChainTx";
@@ -53,6 +54,11 @@ import {
   parseTokenConfigResult,
   parseInstantSettingsInputs,
 } from "@/lib/curatorManageableVaultFormat";
+import {
+  parsePositiveRate18OrError,
+  parseRequestIdOrNull,
+  parseRequestIdsOrError,
+} from "@/lib/requestApprovalValidation";
 import { AlertTriangle } from "lucide-react";
 
 const CURRENT_NAV_FALLBACK = "1.1162";
@@ -100,6 +106,17 @@ function formatDepositRequestSubmittedAtUtc(iso: string): string {
   }
 }
 
+function getTokenOutRateFromMintRequest(raw: unknown): bigint | undefined {
+  if (Array.isArray(raw) && raw.length > 5 && typeof raw[5] === "bigint") {
+    return raw[5];
+  }
+  if (typeof raw === "object" && raw != null && "tokenOutRate" in raw) {
+    const value = (raw as { tokenOutRate?: unknown }).tokenOutRate;
+    if (typeof value === "bigint") return value;
+  }
+  return undefined;
+}
+
 export default function DepositVaultPage() {
   const { address: walletAddress, isConnected } = useAccount();
   const { vault, chainId, mTokenAddress, valid } = useCuratorVaultSummary();
@@ -139,6 +156,62 @@ export default function DepositVaultPage() {
     chainId,
     query: { enabled: Boolean(mToken) },
   });
+  const [currentOracleNav, setCurrentOracleNav] = useState(CURRENT_NAV_FALLBACK);
+  const { data: depositDataFeedAddressRaw } = useReadContract({
+    address: vaultAddress as `0x${string}` | undefined,
+    abi: manageableVaultAbi,
+    functionName: "mTokenDataFeed",
+    chainId,
+    query: { enabled: Boolean(vaultAddress) },
+  });
+  const depositDataFeedAddress =
+    typeof depositDataFeedAddressRaw === "string" && isAddress(depositDataFeedAddressRaw)
+      ? (depositDataFeedAddressRaw as Address)
+      : undefined;
+  const { data: depositAggregatorRaw } = useReadContract({
+    address: depositDataFeedAddress,
+    abi: dataFeedAbi,
+    functionName: "aggregator",
+    chainId,
+    query: { enabled: Boolean(depositDataFeedAddress) },
+  });
+  const depositAggregator =
+    typeof depositAggregatorRaw === "string" &&
+    isAddress(depositAggregatorRaw) &&
+    depositAggregatorRaw !== zeroAddress
+      ? (depositAggregatorRaw as Address)
+      : undefined;
+  const { data: depositAggregatorDecimals } = useReadContract({
+    address: depositAggregator,
+    abi: aggregatorV3DecimalsAbi,
+    functionName: "decimals",
+    chainId,
+    query: { enabled: Boolean(depositAggregator) },
+  });
+  useEffect(() => {
+    if (
+      !publicClient ||
+      !depositAggregator ||
+      depositAggregatorDecimals == null ||
+      typeof chainId !== "number"
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void readAggregatorLatestNav(publicClient, {
+      address: depositAggregator,
+      chainId,
+      decimals: Number(depositAggregatorDecimals),
+    }).then((snap) => {
+      if (cancelled || !snap) return;
+      setCurrentOracleNav(
+        formatDisplayNumber(snap.nav, { minimumFractionDigits: 0, maximumFractionDigits: 6 }),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [publicClient, depositAggregator, depositAggregatorDecimals, chainId]);
 
   const { data: tokensReceiver, refetch: refetchTokensReceiver } = useReadContract({
     address: vaultAddress as `0x${string}` | undefined,
@@ -408,8 +481,7 @@ export default function DepositVaultPage() {
     pendingRequests.forEach((r, i) => {
       const entry = depositRequestsOnChainBatch?.[i];
       const raw = readContractsSuccessResult<unknown>(entry);
-      const rate =
-        Array.isArray(raw) && raw.length > 5 ? raw[5] : typeof raw === "object" && raw && "tokenOutRate" in raw ? (raw as any).tokenOutRate : undefined;
+      const rate = getTokenOutRateFromMintRequest(raw);
       if (typeof rate !== "bigint") {
         m.set(r.id, "—");
         return;
@@ -428,19 +500,13 @@ export default function DepositVaultPage() {
   const [rateModalOpen, setRateModalOpen] = useState(false);
   const [rateModalAction, setRateModalAction] = useState("");
   const [rateModalLabel, setRateModalLabel] = useState("");
-  const initialNav = vaultDetail?.navPerShare ? String(vaultDetail.navPerShare) : CURRENT_NAV_FALLBACK;
+  const initialNav = CURRENT_NAV_FALLBACK;
   const [newRate, setNewRate] = useState(initialNav);
-  const [rateModalBaselineNav, setRateModalBaselineNav] = useState(initialNav);
   const [rateModalBulkMode, setRateModalBulkMode] = useState<"bulk-new-rate" | null>(null);
   const [rateModalSingleMode, setRateModalSingleMode] = useState<"single-safe" | "single-approve" | null>(
     null,
   );
   const [rateModalRequestId, setRateModalRequestId] = useState<string | null>(null);
-  useEffect(() => {
-    const fallback = vaultDetail?.navPerShare ? String(vaultDetail.navPerShare) : CURRENT_NAV_FALLBACK;
-    setRateModalBaselineNav(fallback);
-    setNewRate(fallback);
-  }, [vaultDetail?.navPerShare]);
   useEffect(() => {
     const idSet = new Set(pendingRequests.map((r) => r.id));
     setSelected((prev) => prev.filter((id) => idSet.has(id)));
@@ -870,40 +936,36 @@ export default function DepositVaultPage() {
   };
 
   const openRateModal = (action: string, label: string) => {
-    const currentNav = vaultDetail?.navPerShare ? String(vaultDetail.navPerShare) : CURRENT_NAV_FALLBACK;
-    setRateModalBaselineNav(currentNav);
-    setNewRate(currentNav);
+    setNewRate(currentOracleNav);
     setRateModalAction(action);
     setRateModalLabel(label);
     setRateModalOpen(true);
   };
 
   const submitRateModal = () => {
-    const next = stripNumberGrouping(newRate).trim();
-    let nextRaw: bigint;
-    try {
-      nextRaw = parseUnits(next || "0", 18);
-    } catch {
-      toast.error("New rate is invalid.");
+    const parsedRate = parsePositiveRate18OrError(newRate);
+    if (!parsedRate.ok) {
+      toast.error(
+        parsedRate.reason === "non_positive"
+          ? "New rate must be greater than 0."
+          : "New rate is invalid.",
+      );
       return;
     }
-    if (nextRaw <= 0n) {
-      toast.error("New rate must be greater than 0.");
-      return;
-    }
+    const nextRaw = parsedRate.rate;
 
     setRateModalOpen(false);
     if (rateModalSingleMode) {
-      if (!rateModalRequestId || !/^\d+$/.test(rateModalRequestId)) {
+      const requestId = parseRequestIdOrNull(rateModalRequestId);
+      if (requestId == null || !rateModalRequestId) {
         toast.error("Invalid request id.");
         return;
       }
-      const requestId = BigInt(rateModalRequestId);
       const isSafe = rateModalSingleMode === "single-safe";
       const modeRow = isSafe
         ? { label: "Safe Approve", value: "New rate is subject to variation tolerance check." }
         : { label: "Approve", value: "New rate bypasses variation tolerance check." };
-      const currentPriceRow = { label: "Current Price", value: `$${rateModalBaselineNav}` };
+      const currentPriceRow = { label: "Current Price", value: `$${currentOracleNav}` };
       const newPriceRow = {
         label: "New Price",
         value: formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
@@ -934,32 +996,43 @@ export default function DepositVaultPage() {
         toast.error("Select at least one request.");
         return;
       }
-      const requestIds: bigint[] = [];
-      for (const id of selected) {
-        if (!/^\d+$/.test(id)) {
-          toast.error(`Invalid request id: ${id}`);
-          return;
-        }
-        requestIds.push(BigInt(id));
+      const parsedIds = parseRequestIdsOrError(selected);
+      if (!parsedIds.ok) {
+        toast.error(`Invalid request id: ${parsedIds.invalidId}`);
+        return;
       }
+      const { requestIds } = parsedIds;
       queueVaultCall(
         `Batch Approve at Custom Price (#${selected.join(", #")})`,
-        `${selected.length} requests at rate ${formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
+        `${selected.length} requests at price ${formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
           minimumFractionDigits: 0,
           maximumFractionDigits: 6,
         })}`,
         "safeBulkApproveRequest",
         [requestIds, nextRaw],
-        "Bulk approve at new rate submitted",
+        "Batch approve at new price submitted",
         `safeBulkApproveRequest([${requestIds.map((v) => v.toString()).join(", ")}], ${nextRaw.toString()})`,
         true,
-        null,
+        [
+          { label: "Current Price", value: `$${currentOracleNav}` },
+          {
+            label: "Number of Requests",
+            value: `${selected.length} request${selected.length !== 1 ? "s" : ""}`,
+          },
+          {
+            label: `Deposit Price (USD per ${mTokenSymbol ?? "mToken"})`,
+            value: `$${formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 6,
+            })}`,
+          },
+        ],
         "Custom Price",
       );
       setRateModalBulkMode(null);
       return;
     }
-    openConfirm(rateModalAction, `Rate: $${newRate}`);
+    openConfirm(rateModalAction, `Price: $${newRate}`);
   };
 
   const handleSaveInstantSettings = () => {
@@ -1342,24 +1415,22 @@ export default function DepositVaultPage() {
               className="text-xs"
               disabled={selected.length === 0}
               onClick={() => {
-                const requestIds: bigint[] = [];
-                for (const id of selected) {
-                  if (!/^\d+$/.test(id)) {
-                    toast.error(`Invalid request id: ${id}`);
-                    return;
-                  }
-                  requestIds.push(BigInt(id));
+                const parsed = parseRequestIdsOrError(selected);
+                if (!parsed.ok) {
+                  toast.error(`Invalid request id: ${parsed.invalidId}`);
+                  return;
                 }
+                const { requestIds } = parsed;
                 queueVaultCall(
                   `Batch Approve at Current Price (${selectedIds})`,
                   "",
                   "safeBulkApproveRequest",
                   [requestIds],
-                  "Bulk approve submitted",
+                  "Batch approve at current price submitted",
                   `safeBulkApproveRequest([${requestIds.map((v) => v.toString()).join(", ")}])`,
                   true,
                   [
-                    { label: "Current Price", value: `$${rateModalBaselineNav}` },
+                    { label: "Current Price", value: `$${currentOracleNav}` },
                     {
                       label: "Number of Requests",
                       value: `${selected.length} request${selected.length !== 1 ? "s" : ""}`,
@@ -1377,24 +1448,22 @@ export default function DepositVaultPage() {
               className="text-xs"
               disabled={selected.length === 0}
               onClick={() => {
-                const requestIds: bigint[] = [];
-                for (const id of selected) {
-                  if (!/^\d+$/.test(id)) {
-                    toast.error(`Invalid request id: ${id}`);
-                    return;
-                  }
-                  requestIds.push(BigInt(id));
+                const parsed = parseRequestIdsOrError(selected);
+                if (!parsed.ok) {
+                  toast.error(`Invalid request id: ${parsed.invalidId}`);
+                  return;
                 }
+                const { requestIds } = parsed;
                 queueVaultCall(
                   `Batch Approve at Requested Price (${selectedIds})`,
                   "",
                   "safeBulkApproveRequestAtSavedRate",
                   [requestIds],
-                  "Bulk approve at saved rate submitted",
+                  "Batch approve at requested price submitted",
                   `safeBulkApproveRequestAtSavedRate([${requestIds.map((v) => v.toString()).join(", ")}])`,
                   true,
                   [
-                    { label: "Current Price", value: `$${rateModalBaselineNav}` },
+                    { label: "Current Price", value: `$${currentOracleNav}` },
                     {
                       label: "Number of Requests",
                       value: `${selected.length} request${selected.length !== 1 ? "s" : ""}`,
@@ -1441,9 +1510,8 @@ export default function DepositVaultPage() {
             </thead>
             <tbody>
               {pendingRequests.map((r) => (
-                <>{/* eslint-disable-next-line react/jsx-key */}
+                <Fragment key={r.id}>
                   <tr
-                    key={r.id}
                     className="border-b border-border/50 cursor-pointer hover:bg-secondary/30"
                     onClick={() => setExpanded(expanded === r.id ? null : r.id)}
                   >
@@ -1498,11 +1566,11 @@ export default function DepositVaultPage() {
                             variant="destructive"
                             className="text-xs"
                             onClick={() => {
-                              if (!/^\d+$/.test(r.id)) {
+                              const requestId = parseRequestIdOrNull(r.id);
+                              if (requestId == null) {
                                 toast.error(`Invalid request id: ${r.id}`);
                                 return;
                               }
-                              const requestId = BigInt(r.id);
                               queueVaultCall(
                                 `Reject #${r.id}`,
                                 `Request #${r.id}`,
@@ -1522,7 +1590,7 @@ export default function DepositVaultPage() {
                       </td>
                     </tr>
                   ) : null}
-                </>
+                </Fragment>
               ))}
               {!depositRequestsLoading && !depositRequestsError && pendingRequests.length === 0 ? (
                 <tr>
@@ -1606,7 +1674,7 @@ export default function DepositVaultPage() {
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs text-muted-foreground">Instant Deposit Fee</label>
+              <label className="text-xs text-muted-foreground">Instant Deposit Fee (%)</label>
               <Input
                 value={instantFeeInput}
                 onChange={(e) => setInstantFeeInput(formatNumberInputWithGrouping(e.target.value))}
@@ -1900,7 +1968,7 @@ export default function DepositVaultPage() {
                   <div className="flex justify-between gap-2 items-start">
                     <span className="text-muted-foreground shrink-0 pt-0.5">Current Price</span>
                     <span className="text-foreground text-right break-words min-w-0 max-w-[min(100%,20rem)] leading-snug whitespace-pre-line font-mono">
-                      ${rateModalBaselineNav}
+                      ${currentOracleNav}
                     </span>
                   </div>
                   <div className="flex justify-between gap-2 items-start">
@@ -1926,7 +1994,7 @@ export default function DepositVaultPage() {
             ) : (
               <>
                 <div className="text-xs text-muted-foreground font-mono">
-                  Current Price: ${rateModalBaselineNav}
+                  Current Price: ${currentOracleNav}
                 </div>
                 {rateModalSingleRequestedContent ? (
                   <div className="rounded-md border border-border bg-muted/30 px-3 py-2.5 space-y-1.5">

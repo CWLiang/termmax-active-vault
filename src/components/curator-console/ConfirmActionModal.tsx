@@ -186,7 +186,7 @@ export function ConfirmActionModal({
     if (open) {
       setStatus("idle");
       setErrorText(null);
-      setHadConfirmHandler(Boolean(onConfirm));
+      setHadConfirmHandler(false);
     }
   }, [open]);
 

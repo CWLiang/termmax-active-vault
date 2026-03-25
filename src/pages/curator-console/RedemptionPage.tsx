@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,11 @@ import {
   parseTokenConfigResult,
   parseInstantSettingsInputs,
 } from "@/lib/curatorManageableVaultFormat";
+import {
+  parsePositiveRate18OrError,
+  parseRequestIdOrNull,
+  parseRequestIdsOrError,
+} from "@/lib/requestApprovalValidation";
 
 /** On-chain `Request.mTokenRate` from `mTokenDataFeed.getDataInBase18()`. */
 const REDEEM_REQUEST_MTOKEN_RATE_DECIMALS = 18;
@@ -915,22 +920,21 @@ export default function RedemptionPage() {
   const submitRateModal = () => {
     setRateModalOpen(false);
     if (rateModalSingleMode) {
-      if (!rateModalRequestId || !/^\d+$/.test(rateModalRequestId)) {
+      const requestId = parseRequestIdOrNull(rateModalRequestId);
+      if (requestId == null || !rateModalRequestId) {
         toast.error("Invalid request id.");
         return;
       }
-      const requestId = BigInt(rateModalRequestId);
-      let newRateRaw: bigint;
-      try {
-        newRateRaw = parseUnits(stripNumberGrouping(newRate) || "0", 18);
-      } catch {
-        toast.error("New rate is invalid.");
+      const parsedRate = parsePositiveRate18OrError(newRate);
+      if (!parsedRate.ok) {
+        toast.error(
+          parsedRate.reason === "non_positive"
+            ? "New rate must be greater than 0."
+            : "New rate is invalid.",
+        );
         return;
       }
-      if (newRateRaw <= 0n) {
-        toast.error("New rate must be greater than 0.");
-        return;
-      }
+      const newRateRaw = parsedRate.rate;
       const isSafe = rateModalSingleMode === "single-safe";
       queueVaultCall(
         `${isSafe ? "Safe Approve" : "Approve"} #${rateModalRequestId} with Custom Price`,
@@ -955,25 +959,22 @@ export default function RedemptionPage() {
         toast.error("Select at least one request.");
         return;
       }
-      const requestIds: bigint[] = [];
-      for (const id of selected) {
-        if (!/^\d+$/.test(id)) {
-          toast.error(`Invalid request id: ${id}`);
-          return;
-        }
-        requestIds.push(BigInt(id));
-      }
-      let newRateRaw: bigint;
-      try {
-        newRateRaw = parseUnits(stripNumberGrouping(newRate) || "0", 18);
-      } catch {
-        toast.error("New rate is invalid.");
+      const parsedIds = parseRequestIdsOrError(selected);
+      if (!parsedIds.ok) {
+        toast.error(`Invalid request id: ${parsedIds.invalidId}`);
         return;
       }
-      if (newRateRaw <= 0n) {
-        toast.error("New rate must be greater than 0.");
+      const { requestIds } = parsedIds;
+      const parsedRate = parsePositiveRate18OrError(newRate);
+      if (!parsedRate.ok) {
+        toast.error(
+          parsedRate.reason === "non_positive"
+            ? "New rate must be greater than 0."
+            : "New rate is invalid.",
+        );
         return;
       }
+      const newRateRaw = parsedRate.rate;
       const redemptionPriceHuman = formatDisplayNumber(Number(stripNumberGrouping(newRate)), {
         minimumFractionDigits: 0,
         maximumFractionDigits: 6,
@@ -1001,7 +1002,7 @@ export default function RedemptionPage() {
       setRateModalBulkMode(null);
       return;
     }
-    openConfirm(rateModalAction, `Rate: $${newRate}`);
+    openConfirm(rateModalAction, `Price: $${newRate}`);
   };
 
   const selectedIds = selected.length > 0 ? `#${selected.join(", #")}` : "";
@@ -1322,14 +1323,12 @@ export default function RedemptionPage() {
           <div className="flex gap-2 flex-wrap">
             <Button size="sm" className="text-xs" disabled={selected.length === 0}
               onClick={() => {
-                const requestIds: bigint[] = [];
-                for (const id of selected) {
-                  if (!/^\d+$/.test(id)) {
-                    toast.error(`Invalid request id: ${id}`);
-                    return;
-                  }
-                  requestIds.push(BigInt(id));
+                const parsed = parseRequestIdsOrError(selected);
+                if (!parsed.ok) {
+                  toast.error(`Invalid request id: ${parsed.invalidId}`);
+                  return;
                 }
+                const { requestIds } = parsed;
                 queueVaultCall(
                   `Batch Approve at Current Price (${selectedIds})`,
                   "",
@@ -1351,14 +1350,12 @@ export default function RedemptionPage() {
             </Button>
             <Button size="sm" variant="outline" className="text-xs" disabled={selected.length === 0}
               onClick={() => {
-                const requestIds: bigint[] = [];
-                for (const id of selected) {
-                  if (!/^\d+$/.test(id)) {
-                    toast.error(`Invalid request id: ${id}`);
-                    return;
-                  }
-                  requestIds.push(BigInt(id));
+                const parsed = parseRequestIdsOrError(selected);
+                if (!parsed.ok) {
+                  toast.error(`Invalid request id: ${parsed.invalidId}`);
+                  return;
                 }
+                const { requestIds } = parsed;
                 queueVaultCall(
                   `Batch Approve at Requested Price (${selectedIds})`,
                   "",
@@ -1408,8 +1405,8 @@ export default function RedemptionPage() {
             </thead>
             <tbody>
               {pendingRequests.map((r) => (
-                <>{/* eslint-disable-next-line react/jsx-key */}
-                  <tr key={r.id} className="border-b border-border/50 cursor-pointer hover:bg-secondary/30"
+                <Fragment key={r.id}>
+                  <tr className="border-b border-border/50 cursor-pointer hover:bg-secondary/30"
                     onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
                     <td className="py-2" onClick={(e) => e.stopPropagation()}>
                       <Checkbox checked={selected.includes(r.id)} onCheckedChange={() => toggleSelect(r.id)} />
@@ -1452,11 +1449,11 @@ export default function RedemptionPage() {
                           </Button>
                           <Button size="sm" variant="destructive" className="text-xs"
                             onClick={() => {
-                              if (!/^\d+$/.test(r.id)) {
+                              const requestId = parseRequestIdOrNull(r.id);
+                              if (requestId == null) {
                                 toast.error(`Invalid request id: ${r.id}`);
                                 return;
                               }
-                              const requestId = BigInt(r.id);
                               queueVaultCall(
                                 `Reject #${r.id}`,
                                 `Request #${r.id}`,
@@ -1479,7 +1476,7 @@ export default function RedemptionPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
               {!redeemRequestsLoading && !redeemRequestsError && pendingRequests.length === 0 ? (
                 <tr>
