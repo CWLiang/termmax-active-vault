@@ -262,10 +262,36 @@ export default function RedemptionPage() {
     });
   }, [paymentTokenAddresses, tokensConfigBatch, tokenSymbolsBatch, tokenDecimalsBatch]);
 
+  const oraclePriceContracts = useMemo(
+    () =>
+      paymentTokenRows.map((row) => {
+        const oracle = row.cfg?.dataFeed;
+        if (!oracle || !isAddress(oracle)) return null;
+        return {
+          address: oracle as `0x${string}`,
+          abi: dataFeedAbi,
+          functionName: "getDataInBase18" as const,
+          chainId,
+        };
+      }),
+    [paymentTokenRows, chainId],
+  );
+  const { data: oraclePriceBatch, isFetching: oraclePriceFetching } = useReadContracts({
+    contracts: oraclePriceContracts.filter(Boolean) as readonly {
+      address: `0x${string}`;
+      abi: typeof dataFeedAbi;
+      functionName: "getDataInBase18";
+      chainId: number;
+    }[],
+    query: {
+      enabled: oraclePriceContracts.some(Boolean),
+    },
+  });
+
   const paymentTokensTableLoading =
     paymentTokensListLoading ||
     (paymentTokenAddresses.length > 0 &&
-      (tokensConfigFetching || tokenSymbolsFetching || tokenDecimalsFetching));
+      (tokensConfigFetching || tokenSymbolsFetching || tokenDecimalsFetching || oraclePriceFetching));
 
   useEffect(() => {
     if (instantFee != null) {
@@ -1609,50 +1635,63 @@ export default function RedemptionPage() {
         </CardContent>
       </Card>
 
-      {/* Payment Token Management */}
+      {/* Underlying Token Management */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3">
-          <CardTitle className="font-display text-sm">Payment Token Management</CardTitle>
+          <CardTitle className="font-display text-sm">Underlying Token Management</CardTitle>
         </CardHeader>
         <CardContent>
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border text-muted-foreground">
                 <th className="text-left py-2 font-medium">Token</th>
-                <th className="text-left py-2 font-medium">DataFeed</th>
+                <th className="text-left py-2 font-medium">Oracle</th>
+                <th className="text-right py-2 font-medium">Price</th>
                 <th className="text-right py-2 font-medium">Fee</th>
-                <th className="text-right py-2 font-medium">Allowance</th>
-                <th className="text-center py-2 font-medium">Stable</th>
+                <th className="text-right py-2 font-medium">Redemption Capacity</th>
                 <th className="text-right py-2 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {!paymentVaultAddr ? (
                 <tr>
-                  <td colSpan={6} className="py-4 text-muted-foreground text-center">
+                  <td colSpan={7} className="py-4 text-muted-foreground text-center">
                     Select a vault with a redemption vault address to load payment tokens.
                   </td>
                 </tr>
               ) : paymentTokensListError ? (
                 <tr>
-                  <td colSpan={6} className="py-4 text-destructive text-center">
+                  <td colSpan={7} className="py-4 text-destructive text-center">
                     Could not load payment tokens from the vault.
                   </td>
                 </tr>
               ) : paymentTokensTableLoading ? (
                 <tr>
-                  <td colSpan={6} className="py-4 text-muted-foreground text-center">
+                  <td colSpan={7} className="py-4 text-muted-foreground text-center">
                     Loading payment tokens…
                   </td>
                 </tr>
               ) : paymentTokenRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-4 text-muted-foreground text-center">
+                  <td colSpan={7} className="py-4 text-muted-foreground text-center">
                     No payment tokens configured.
                   </td>
                 </tr>
               ) : (
-                paymentTokenRows.map(({ token, symbol, cfg }) => (
+                paymentTokenRows.map(({ token, symbol, cfg }, i) => {
+                  const oracle = cfg?.dataFeed;
+                  const contractIdx = oraclePriceContracts.slice(0, i + 1).filter(Boolean).length - 1;
+                  const rawOraclePrice = readContractsSuccessResult<unknown>(
+                    contractIdx >= 0 ? oraclePriceBatch?.[contractIdx] : undefined,
+                  );
+                  const oraclePrice =
+                    typeof rawOraclePrice === "bigint"
+                      ? formatDisplayNumber(Number(formatUnits(rawOraclePrice, 18)), {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 6,
+                        })
+                      : "—";
+                  return (
                   <tr key={token} className="border-b border-border/50">
                     <td className="py-2 font-mono" title={token}>
                       {symbol}
@@ -1664,6 +1703,7 @@ export default function RedemptionPage() {
                         <span className="font-mono text-sm text-muted-foreground">—</span>
                       )}
                     </td>
+                    <td className="py-2 font-mono text-right">{oraclePrice}</td>
                     <td className="py-2 font-mono text-right">
                       {cfg ? formatFeePercent(cfg.fee) : "—"}
                     </td>
@@ -1676,15 +1716,6 @@ export default function RedemptionPage() {
                       }
                     >
                       {cfg ? formatPaymentAllowanceDisplay(cfg.allowance) : "—"}
-                    </td>
-                    <td className="py-2 text-center">
-                      {cfg ? (
-                        <span className={cfg.stable ? "text-yield-positive" : "text-muted-foreground"}>
-                          {cfg.stable ? "Yes" : "No"}
-                        </span>
-                      ) : (
-                        "—"
-                      )}
                     </td>
                     <td className="py-2 text-right">
                       <div className="flex gap-1 justify-end flex-wrap">
@@ -1706,12 +1737,13 @@ export default function RedemptionPage() {
                             cfg && openEditPaymentTokenAllowance(token, symbol, cfg.allowance)
                           }
                         >
-                          Edit Allowance
+                          Edit Capacity
                         </Button>
                       </div>
                     </td>
                   </tr>
-                ))
+                );
+                })
               )}
             </tbody>
           </table>
@@ -1720,7 +1752,9 @@ export default function RedemptionPage() {
 
       {/* Withdraw Token (normal style) */}
       <Card className="bg-card border-border">
-        <CardHeader className="pb-3"><CardTitle className="font-display text-sm">Withdraw Token</CardTitle></CardHeader>
+        <CardHeader className="pb-3">
+          <CardTitle className="font-display text-sm">Withdraw Token from Redemption Vault</CardTitle>
+        </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
@@ -1797,10 +1831,6 @@ export default function RedemptionPage() {
           <Button variant="outline" onClick={handleWithdrawToken} disabled={!withdrawTokenCanSubmit}>
             Withdraw
           </Button>
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3 text-accent" />
-            This will transfer assets directly out of the contract. Confirm before proceeding.
-          </p>
         </CardContent>
       </Card>
 

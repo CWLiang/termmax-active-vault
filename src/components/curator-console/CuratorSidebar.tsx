@@ -113,9 +113,6 @@ export function CuratorSidebar() {
                           {!collapsed && (
                             <span className="flex items-center gap-2">
                               {item.title}
-                              {item.badge === "high" && (
-                                <span className="text-[9px] bg-primary/20 text-primary px-1 rounded font-mono">HF</span>
-                              )}
                             </span>
                           )}
                         </NavLink>

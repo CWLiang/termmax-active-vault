@@ -240,7 +240,7 @@ function VaultSidePanel({
         ) : null}
         {variant === "deposit" ? (
           <CuratorWalletRow
-            label="Management Wallet (Recipient of Deposited Fund)"
+            label="Management Wallet (Recipient of Deposited Funds)"
             address={tokenReceiver}
             loading={tokenReceiverLoading}
             readError={tokenReceiverError}

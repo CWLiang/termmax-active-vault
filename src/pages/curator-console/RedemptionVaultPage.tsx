@@ -135,10 +135,10 @@ export default function RedemptionVaultPage() {
         </CardContent>
       </Card>
 
-      {/* Payment Token Management */}
+      {/* Underlying Token Management */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="font-display text-sm">Payment Token Management</CardTitle>
+          <CardTitle className="font-display text-sm">Underlying Token Management</CardTitle>
           <Button size="sm" variant="ghost" className="text-xs text-primary" onClick={() => setShowAddToken(!showAddToken)}>
             <Plus className="h-3 w-3 mr-1" />Add Payment Token
           </Button>

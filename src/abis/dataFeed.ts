@@ -5,6 +5,13 @@
 export const dataFeedAbi = [
   {
     type: "function",
+    name: "getDataInBase18",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256", name: "" }],
+  },
+  {
+    type: "function",
     name: "aggregator",
     stateMutability: "view",
     inputs: [],
