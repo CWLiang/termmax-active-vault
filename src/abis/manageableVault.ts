@@ -234,4 +234,19 @@ export const manageableVaultAbi = [
       { type: "uint256", name: "tokenOutRate" },
     ],
   },
+  /** DepositVault: `mapping(uint256 => Request) public mintRequests` */
+  {
+    type: "function",
+    name: "mintRequests",
+    stateMutability: "view",
+    inputs: [{ type: "uint256", name: "requestId" }],
+    outputs: [
+      { type: "address", name: "sender" },
+      { type: "address", name: "tokenIn" },
+      { type: "uint8", name: "status" },
+      { type: "uint256", name: "depositedUsdAmount" },
+      { type: "uint256", name: "usdAmountWithoutFees" },
+      { type: "uint256", name: "tokenOutRate" },
+    ],
+  },
 ] as const;
