@@ -6,6 +6,7 @@ import {
   Banknote, Lock, Timer, CheckCircle2, Waves, ChevronDown, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDisplayNumber, formatUsdCompact } from "@/lib/formatNumbers";
 
 /* ─── Types ─── */
 interface RWAPosition {
@@ -81,31 +82,29 @@ interface VaultBalanceSheetProps {
 
 /* ─── Helpers ─── */
 function fmt(v: number) {
-  if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(v) >= 1_000) return `$${Math.round(v).toLocaleString()}`;
-  return `$${Math.round(v).toLocaleString()}`;
+  return formatUsdCompact(v, "balanceSheet");
 }
 
 function fmtFull(v: number) {
-  return `$${Math.round(v).toLocaleString()}`;
+  return `$${formatDisplayNumber(Math.round(v), { maximumFractionDigits: 0 })}`;
 }
 
 function fmtSigned(v: number) {
   const prefix = v >= 0 ? "+$" : "-$";
-  return `${prefix}${Math.abs(Math.round(v)).toLocaleString()}`;
+  return `${prefix}${formatDisplayNumber(Math.abs(Math.round(v)), { maximumFractionDigits: 0 })}`;
 }
 
 function pct(v: number) {
-  return `${(v * 100).toFixed(2)}%`;
+  return `${formatDisplayNumber(v * 100, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 }
 
 function pctShort(v: number) {
-  return `${(v * 100).toFixed(1)}%`;
+  return `${formatDisplayNumber(v * 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
 
 function pctSigned(v: number) {
   const prefix = v >= 0 ? "+" : "";
-  return `${prefix}${(v * 100).toFixed(2)}%`;
+  return `${prefix}${formatDisplayNumber(v * 100, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 }
 
 function formatDate(iso: string) {
@@ -251,8 +250,16 @@ export function VaultBalanceSheet({
         {[
           { label: "Total Assets", value: fmt(totalAssets_AC), accent: false },
           { label: "NAV", value: fmt(nav_AC), accent: true },
-          { label: "Leverage", value: `${leverageRatio.toFixed(2)}x`, accent: false },
-          { label: "NAV/Share", value: `$${navPerShare.toFixed(4)}`, accent: false },
+          {
+            label: "Leverage",
+            value: `${formatDisplayNumber(leverageRatio, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}x`,
+            accent: false,
+          },
+          {
+            label: "NAV/Share",
+            value: `$${formatDisplayNumber(navPerShare, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}`,
+            accent: false,
+          },
           { label: "Since Inception", value: pctSigned(sinceInception), accent: false, isPositive: sinceInception >= 0 },
           { label: "Est. Net APY", value: `~${pctShort(estNetAPY)}`, accent: true },
         ].map((item) => (
@@ -585,7 +592,10 @@ export function VaultBalanceSheet({
             subtotal={fmtFull(nav_AC)}
             defaultOpen
             summaryItems={[
-              { name: "NAV per Share", value: `$${navPerShare.toFixed(4)}` },
+              {
+                name: "NAV per Share",
+                value: `$${formatDisplayNumber(navPerShare, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}`,
+              },
               { name: "Since Inception", value: pctSigned(sinceInception) },
             ]}
           >
@@ -622,11 +632,15 @@ export function VaultBalanceSheet({
             <div className="mt-3 pt-3 border-t border-border/30 space-y-1.5">
               <div className="flex justify-between text-xs">
                 <span className="font-mono text-muted-foreground">NAV per Share</span>
-                <span className="font-mono text-foreground">${navPerShare.toFixed(4)}</span>
+                <span className="font-mono text-foreground">
+                  ${formatDisplayNumber(navPerShare, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}
+                </span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="font-mono text-muted-foreground flex items-center gap-1"><Award className="h-3 w-3" />High Water Mark</span>
-                <span className="font-mono text-foreground">${fees.highWaterMark.toFixed(4)}</span>
+                <span className="font-mono text-foreground">
+                  ${formatDisplayNumber(fees.highWaterMark, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}
+                </span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="font-mono text-muted-foreground">Since Inception</span>
@@ -636,7 +650,9 @@ export function VaultBalanceSheet({
               </div>
               <div className="flex justify-between text-xs">
                 <span className="font-mono text-muted-foreground flex items-center gap-1"><Users className="h-3 w-3" />Shares Outstanding</span>
-                <span className="font-mono text-foreground">{shares.totalSharesOutstanding.toLocaleString()}</span>
+                <span className="font-mono text-foreground">
+                  {formatDisplayNumber(shares.totalSharesOutstanding, { maximumFractionDigits: 0 })}
+                </span>
               </div>
             </div>
           </CollapsibleSection>

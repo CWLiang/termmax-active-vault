@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ExternalLink, Download } from "lucide-react";
-
 const logs = [
   { time: "2026-03-19 09:32", vault: "RWA Enhanced", action: "reportNAV $1.1162", by: "0x1a2b…", tx: "0xTx01…" },
   { time: "2026-03-19 08:10", vault: "T-Bill Maximizer", action: "approveRequest #1040", by: "0x1a2b…", tx: "0xTx02…" },

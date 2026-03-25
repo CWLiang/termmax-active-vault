@@ -11,6 +11,15 @@ export default defineConfig(({ mode }) => ({
     hmr: {
       overlay: false,
     },
+    proxy: {
+      // Browser CORS bypass for local dev — forwards to Strategy Vault API
+      "/termmax-api": {
+        target: "https://termmax-strategy-vault-service.onrender.com",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/termmax-api/, "") || "/",
+        secure: true,
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

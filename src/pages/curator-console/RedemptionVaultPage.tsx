@@ -1,18 +1,68 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { ConfirmActionModal } from "@/components/curator-console/ConfirmActionModal";
+import { isAddress, parseUnits } from "viem";
 import { AlertTriangle, Plus } from "lucide-react";
+
+const DEFAULT_INSTANT_FEE = "0.10";
+const DEFAULT_INSTANT_DAILY = "500000";
+const DEFAULT_VARIATION = "1.0";
+const DEFAULT_REDEEMER = "0x7e2d...aa09";
 
 export default function RedemptionVaultPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState("");
   const [showAddToken, setShowAddToken] = useState(false);
 
-  const openConfirm = (action: string) => { setConfirmAction(action); setConfirmOpen(true); };
+  const [redeemerInput, setRedeemerInput] = useState(DEFAULT_REDEEMER);
+  const [instantFeeInput, setInstantFeeInput] = useState(DEFAULT_INSTANT_FEE);
+  const [instantDailyInput, setInstantDailyInput] = useState(DEFAULT_INSTANT_DAILY);
+  const [variationInput, setVariationInput] = useState(DEFAULT_VARIATION);
+
+  const [addTokenAddress, setAddTokenAddress] = useState("");
+  const [addTokenDataFeed, setAddTokenDataFeed] = useState("");
+  const [addTokenFeeInput, setAddTokenFeeInput] = useState("0.10");
+  const [addTokenAllowanceInput, setAddTokenAllowanceInput] = useState("500000");
+  const [addTokenStable, setAddTokenStable] = useState(false);
+
+  const [withdrawAmountInput, setWithdrawAmountInput] = useState("");
+  const [withdrawToAddress, setWithdrawToAddress] = useState("");
+
+  const openConfirm = (action: string) => {
+    setConfirmAction(action);
+    setConfirmOpen(true);
+  };
+
+  const redeemerDirty = redeemerInput !== DEFAULT_REDEEMER;
+  const instantSettingsDirty =
+    instantFeeInput !== DEFAULT_INSTANT_FEE || instantDailyInput !== DEFAULT_INSTANT_DAILY;
+  const variationDirty = variationInput !== DEFAULT_VARIATION;
+
+  const addPaymentTokenCanSubmit = useMemo(() => {
+    if (!isAddress(addTokenAddress.trim()) || !isAddress(addTokenDataFeed.trim())) return false;
+    const feePct = Number(addTokenFeeInput);
+    if (!Number.isFinite(feePct) || feePct < 0) return false;
+    try {
+      parseUnits(addTokenAllowanceInput || "0", 18);
+    } catch {
+      return false;
+    }
+    return true;
+  }, [addTokenAddress, addTokenDataFeed, addTokenFeeInput, addTokenAllowanceInput]);
+
+  const withdrawDemoCanSubmit = useMemo(() => {
+    if (!isAddress(withdrawToAddress.trim())) return false;
+    try {
+      const amountRaw = parseUnits(withdrawAmountInput || "0", 18);
+      return amountRaw > 0n;
+    } catch {
+      return false;
+    }
+  }, [withdrawToAddress, withdrawAmountInput]);
 
   return (
     <div className="p-6 space-y-6 max-w-5xl">
@@ -47,8 +97,11 @@ export default function RedemptionVaultPage() {
       <Card className="bg-card border-border">
         <CardHeader className="pb-3"><CardTitle className="font-display text-sm">Request Redeemer</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <div><label className="text-xs text-muted-foreground">Redeemer Address</label><Input defaultValue="0x7e2d...aa09" className="font-mono mt-1 max-w-md" /></div>
-          <Button variant="outline" size="sm" onClick={() => openConfirm("Save Redeemer Address")}>Save</Button>
+          <div>
+            <label className="text-xs text-muted-foreground">Redeemer Address</label>
+            <Input value={redeemerInput} onChange={(e) => setRedeemerInput(e.target.value)} className="font-mono mt-1 max-w-md" />
+          </div>
+          <Button variant="outline" size="sm" disabled={!redeemerDirty} onClick={() => openConfirm("Save Redeemer Address")}>Save</Button>
         </CardContent>
       </Card>
 
@@ -57,10 +110,16 @@ export default function RedemptionVaultPage() {
         <CardHeader className="pb-3"><CardTitle className="font-display text-sm">Instant Settings</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-xs text-muted-foreground">Instant Fee (%)</label><Input defaultValue="0.10" className="font-mono mt-1" /></div>
-            <div><label className="text-xs text-muted-foreground">Instant Daily Limit (USDC)</label><Input defaultValue="500000" className="font-mono mt-1" /></div>
+            <div>
+              <label className="text-xs text-muted-foreground">Instant Fee (%)</label>
+              <Input value={instantFeeInput} onChange={(e) => setInstantFeeInput(e.target.value)} className="font-mono mt-1" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Instant Daily Limit (USDC)</label>
+              <Input value={instantDailyInput} onChange={(e) => setInstantDailyInput(e.target.value)} className="font-mono mt-1" />
+            </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => openConfirm("Save Instant Settings")}>Save</Button>
+          <Button variant="outline" size="sm" disabled={!instantSettingsDirty} onClick={() => openConfirm("Save Instant Settings")}>Save</Button>
         </CardContent>
       </Card>
 
@@ -68,15 +127,18 @@ export default function RedemptionVaultPage() {
       <Card className="bg-card border-border">
         <CardHeader className="pb-3"><CardTitle className="font-display text-sm">Variation Tolerance</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <div><label className="text-xs text-muted-foreground">Safe Approval Tolerance (%)</label><Input defaultValue="1.0" className="font-mono mt-1 max-w-xs" /></div>
-          <Button variant="outline" size="sm" onClick={() => openConfirm("Save Variation Tolerance")}>Save</Button>
+          <div>
+            <label className="text-xs text-muted-foreground">Safe Approval Tolerance (%)</label>
+            <Input value={variationInput} onChange={(e) => setVariationInput(e.target.value)} className="font-mono mt-1 max-w-xs" />
+          </div>
+          <Button variant="outline" size="sm" disabled={!variationDirty} onClick={() => openConfirm("Save Variation Tolerance")}>Save</Button>
         </CardContent>
       </Card>
 
-      {/* Payment Tokens */}
+      {/* Underlying Token Management */}
       <Card className="bg-card border-border">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="font-display text-sm">Payment Tokens</CardTitle>
+          <CardTitle className="font-display text-sm">Underlying Token Management</CardTitle>
           <Button size="sm" variant="ghost" className="text-xs text-primary" onClick={() => setShowAddToken(!showAddToken)}>
             <Plus className="h-3 w-3 mr-1" />Add Payment Token
           </Button>
@@ -113,15 +175,16 @@ export default function RedemptionVaultPage() {
           {showAddToken && (
             <div className="mt-4 p-4 bg-secondary/30 rounded-lg space-y-3 border border-border">
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-muted-foreground">Token Address</label><Input className="font-mono mt-1" placeholder="0x..." /></div>
-                <div><label className="text-xs text-muted-foreground">DataFeed</label><Input className="font-mono mt-1" placeholder="0x..." /></div>
-                <div><label className="text-xs text-muted-foreground">Fee (%)</label><Input className="font-mono mt-1" placeholder="0.10" /></div>
-                <div><label className="text-xs text-muted-foreground">Allowance</label><Input className="font-mono mt-1" placeholder="500000" /></div>
+                <div><label className="text-xs text-muted-foreground">Token Address</label><Input value={addTokenAddress} onChange={(e) => setAddTokenAddress(e.target.value)} className="font-mono mt-1" placeholder="0x..." /></div>
+                <div><label className="text-xs text-muted-foreground">DataFeed</label><Input value={addTokenDataFeed} onChange={(e) => setAddTokenDataFeed(e.target.value)} className="font-mono mt-1" placeholder="0x..." /></div>
+                <div><label className="text-xs text-muted-foreground">Fee (%)</label><Input value={addTokenFeeInput} onChange={(e) => setAddTokenFeeInput(e.target.value)} className="font-mono mt-1" placeholder="0.10" /></div>
+                <div><label className="text-xs text-muted-foreground">Allowance</label><Input value={addTokenAllowanceInput} onChange={(e) => setAddTokenAllowanceInput(e.target.value)} className="font-mono mt-1" placeholder="500000" /></div>
               </div>
               <div className="flex items-center gap-2">
-                <Switch /><span className="text-xs text-muted-foreground">Stable</span>
+                <Switch checked={addTokenStable} onCheckedChange={(v) => setAddTokenStable(Boolean(v))} />
+                <span className="text-xs text-muted-foreground">Stable</span>
               </div>
-              <Button size="sm" onClick={() => openConfirm("Add Payment Token")}>Add</Button>
+              <Button size="sm" disabled={!addPaymentTokenCanSubmit} onClick={() => openConfirm("Add Payment Token")}>Add</Button>
             </div>
           )}
         </CardContent>
@@ -138,10 +201,16 @@ export default function RedemptionVaultPage() {
                 <option>USDC</option>
               </select>
             </div>
-            <div><label className="text-xs text-muted-foreground">Amount</label><Input className="font-mono mt-1" placeholder="0" /></div>
-            <div><label className="text-xs text-muted-foreground">Withdraw To</label><Input className="font-mono mt-1" placeholder="0x..." /></div>
+            <div>
+              <label className="text-xs text-muted-foreground">Amount</label>
+              <Input value={withdrawAmountInput} onChange={(e) => setWithdrawAmountInput(e.target.value)} className="font-mono mt-1" placeholder="0" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Withdraw To</label>
+              <Input value={withdrawToAddress} onChange={(e) => setWithdrawToAddress(e.target.value)} className="font-mono mt-1" placeholder="0x..." />
+            </div>
           </div>
-          <Button variant="destructive" onClick={() => openConfirm("Withdraw Token")}>Withdraw</Button>
+          <Button variant="destructive" disabled={!withdrawDemoCanSubmit} onClick={() => openConfirm("Withdraw Token")}>Withdraw</Button>
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <AlertTriangle className="h-3 w-3 text-destructive" />
             This will transfer assets directly out of the contract. Confirm before proceeding.

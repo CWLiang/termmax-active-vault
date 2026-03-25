@@ -1,13 +1,22 @@
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
-import { StatCard } from "@/components/ui/stat-card";
-import { Gauge } from "@/components/ui/gauge";
+import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  TrendingUp, Shield, Clock, ChevronDown, ChevronUp, ArrowDownToLine, ArrowUpFromLine,
-  PieChart as PieChartIcon, Activity, ExternalLink, Info, FileText, Lock, Copy, Bug, ShieldCheck
+  TrendingUp,
+  Shield,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  Activity,
+  ExternalLink,
+  Info,
+  FileText,
+  Lock,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useParams, useNavigate } from "react-router-dom";
@@ -15,139 +24,16 @@ import { cn } from "@/lib/utils";
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid } from "recharts";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
-
-const VAULT_DATA = {
-  name: "RWA Enhanced Yield",
-  curator: "Keyrock Capital",
-  strategy: "Leveraged RWA yield via DigiFT + satellite FT/PT + yield-bearing USDC lending (Aave/Morpho)",
-  strategyDetail: "This vault deploys deposited USDC into institutional-grade RWA tokens — bEQTY (BNY equity fund) and iSNR (Invesco private credit) — via DigiFT. To amplify returns, the vault collateralizes RWA tokens on TermMax to borrow USDC at locked fixed rates (4%), then reinvests borrowed USDC into additional RWA tokens (leverage loop). Satellite positions in discounted Fixed Rate Tokens (TermMax FT-USDC, Pendle PT-sUSDe) provide additional fixed yield. Cash reserves are deployed into Aave and Morpho USDC lending for yield-bearing liquidity, withdrawable on demand. A minimal USDC buffer is kept for gas and instant small withdrawals.",
-  apy7d: 9.8,
-  apy30d: 9.5,
-  apy90d: 9.2,
-  tvl: 27_396_699,
-  capacity: 50_000_000,
-  bufferRatio: 1.7,
-  bufferAmount: 670_000,
-  liquidityAmount: 4_270_000, // buffer + lending positions
-  nav: 1.1182,
-  navDelta24h: 0.028,
-  navDelta7d: 0.19,
-  sharePrice: 1.1182,
-  positions: { rwa: 77.6, frt: 11.3, lending: 9.2, cash: 1.7 },
-  managementFee: 2.0,
-  performanceFee: 10.0,
-  yieldType: "Auto-compounded in NAV",
-  redemptionTimeline: "10–30 days queued",
-  custody: "Fordefi",
-  auditor: "Cantina, ABDK",
-  auditUrl: "https://github.com/term-structure/audits/tree/main/TermMax",
-  bugBounty: "Immunefi",
-  bugBountyUrl: "https://immunefi.com/bug-bounty/termstructurelabs/information/",
-  defiSafetyScore: 93,
-  defiSafetyUrl: "https://www.defisafety.com/app/pqrs/613",
-  inceptionDate: "Jan 2025",
-  contractAddress: "0x1a2b3c4d5e6f7890abcdef1234567890abcdef12",
-  strategyContract: "0xabcdef1234567890abcdef1234567890abcdef12",
-};
-
-// Mock NAV history — starts at $1.00, ends at ~$1.1182
-const NAV_HISTORY_7D = Array.from({ length: 7 }, (_, i) => ({
-  day: `Feb ${i + 27}`,
-  nav: +(1.112 + Math.random() * 0.003 + i * 0.0008).toFixed(4),
-}));
-const NAV_HISTORY_30D = Array.from({ length: 30 }, (_, i) => ({
-  day: `Feb ${i + 1}`,
-  nav: +(1.095 + Math.random() * 0.004 + i * 0.0007).toFixed(4),
-}));
-const NAV_HISTORY_90D = Array.from({ length: 64 }, (_, i) => ({
-  day: `Jan ${(i % 31) + 1}`,
-  nav: +(1.000 + Math.random() * 0.003 + i * 0.00185).toFixed(4),
-}));
-
-const NAV_DATA_MAP: Record<string, typeof NAV_HISTORY_7D> = {
-  "7d": NAV_HISTORY_7D,
-  "30d": NAV_HISTORY_30D,
-  "90d": NAV_HISTORY_90D,
-};
-const APY_MAP: Record<string, number> = {
-  "7d": VAULT_DATA.apy7d,
-  "30d": VAULT_DATA.apy30d,
-  "90d": VAULT_DATA.apy90d,
-};
-
-type RateType = "fixed" | "variable" | "floating" | null;
-type AllocationCategory = "RWA" | "Fixed Rate" | "Lending" | "Loan" | "Instant Liquidity";
-
-interface AllocationItem {
-  name: string;
-  protocol: string;
-  category: AllocationCategory;
-  rateType: RateType;
-  value: number;
-  amount: number;
-  color: string;
-  externalUrl?: string;
-}
-
-const CATEGORY_COLORS: Record<AllocationCategory, string> = {
-  RWA: "hsl(187, 100%, 50%)",
-  "Fixed Rate": "hsl(40, 90%, 55%)",
-  Lending: "hsl(270, 70%, 60%)",
-  Loan: "hsl(0, 65%, 55%)",
-  "Instant Liquidity": "hsl(160, 70%, 45%)",
-};
-
-// Percentages are of Total Assets ($38.98M gross)
-const ALLOCATION_DATA: AllocationItem[] = [
-  { name: "bEQTY", protocol: "DigiFT", category: "RWA", rateType: null, value: 49.6, amount: 19_322_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=bEQTY" },
-  { name: "iSNR", protocol: "DigiFT", category: "RWA", rateType: null, value: 28.2, amount: 10_990_000, color: CATEGORY_COLORS.RWA, externalUrl: "https://www.digift.io/solutions/investDetail?tokenCode=iSNR" },
-  { name: "FT-USDC-Jun25", protocol: "TermMax", category: "Fixed Rate", rateType: "fixed", value: 6.4, amount: 2_500_000, color: CATEGORY_COLORS["Fixed Rate"] },
-  { name: "PT-sUSDe-Sep25", protocol: "Pendle", category: "Fixed Rate", rateType: "fixed", value: 4.9, amount: 1_900_000, color: CATEGORY_COLORS["Fixed Rate"] },
-  { name: "aUSDC", protocol: "Aave", category: "Lending", rateType: "floating", value: 5.1, amount: 2_000_000, color: CATEGORY_COLORS.Lending },
-  { name: "mUSDC", protocol: "Morpho", category: "Lending", rateType: "floating", value: 4.1, amount: 1_600_000, color: CATEGORY_COLORS.Lending },
-  { name: "GT-1 (bEQTY collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 18.5, amount: 7_200_000, color: CATEGORY_COLORS.Loan },
-  { name: "GT-2 (iSNR collateral)", protocol: "TermMax", category: "Loan", rateType: "fixed", value: 10.8, amount: 4_200_000, color: CATEGORY_COLORS.Loan },
-  { name: "USDC", protocol: "Vault", category: "Instant Liquidity", rateType: null, value: 1.7, amount: 670_000, color: CATEGORY_COLORS["Instant Liquidity"] },
-];
-
-const CATEGORY_META: Record<AllocationCategory, { label: string }> = {
-  RWA: { label: "RWA" },
-  "Fixed Rate": { label: "Fixed Rate Tokens" },
-  Lending: { label: "Yield-Bearing Liquidity" },
-  Loan: { label: "Loan" },
-  "Instant Liquidity": { label: "Instant Liquidity" },
-};
-
-// Assets only (exclude Loan) for pie chart
-const ASSET_CATEGORIES: AllocationCategory[] = ["RWA", "Fixed Rate", "Lending", "Instant Liquidity"];
-const LOAN_DATA = ALLOCATION_DATA.filter((d) => d.category === "Loan");
-
-const PIE_DATA = Object.entries(
-  ALLOCATION_DATA.filter((d) => d.category !== "Loan").reduce((acc, item) => {
-    acc[item.category] = (acc[item.category] || 0) + item.value;
-    return acc;
-  }, {} as Record<string, number>)
-).map(([name, value]) => ({
-  name,
-  value,
-  color: CATEGORY_COLORS[name as AllocationCategory],
-}));
-
-const MOCK_ACTIONS = [
-  { time: "1h ago", type: "Deploy USDC to Aave", tx: "0xab12...cd34" },
-  { time: "1h ago", type: "Deploy USDC to Morpho", tx: "0xcd34...ef56" },
-  { time: "1h ago", type: "Buy FT-USDC-Jun25", tx: "0xef56...gh78" },
-  { time: "1h ago", type: "Buy PT-sUSDe-Sep25", tx: "0xgh78...ij90" },
-  { time: "2h ago", type: "RWA Purchase", tx: "0x1a2b...3c4d" },
-  { time: "6h ago", type: "Open GT Position", tx: "0x3c4d...5e6f" },
-  { time: "1d ago", type: "Place Lending Order", tx: "0x5e6f...7890" },
-  { time: "2d ago", type: "Replenish Buffer", tx: "0x7890...abcd" },
-];
+import { useVaultDetailBundle } from "@/hooks/queries/useVaultDetailBundle";
+import { useVaultListData } from "@/hooks/queries/useVaultListData";
+import { useAccount } from "wagmi";
+import type { PortfolioPieSlice, PortfolioRow, VaultDetailView } from "@/domain/vaults/mappers";
+import { getExplorerAddressUrl, getExplorerTxUrl } from "@/lib/explorer";
+import { parseDecimal } from "@/domain/vaults/mappers";
+import { formatDisplayNumber, formatUsdCompact } from "@/lib/formatNumbers";
 
 function formatUSD(value: number) {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(2)}`;
+  return formatUsdCompact(value, "detail");
 }
 
 function truncateAddress(addr: string) {
@@ -159,11 +45,20 @@ function copyToClipboard(text: string) {
   toast.success("Address copied to clipboard");
 }
 
-// --- Vault Details Section ---
-function VaultDetailsSection() {
+function VaultDetailsSection({ view }: { view: VaultDetailView }) {
+  const perfPct =
+    view.performanceFeeBps != null
+      ? formatDisplayNumber(view.performanceFeeBps / 100, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : null;
+  const explorer = getExplorerAddressUrl(view.chainId, view.mTokenAddress);
+
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-      className="rounded-xl border border-border bg-card p-5 space-y-1">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2 }}
+      className="rounded-xl border border-border bg-card p-5 space-y-1"
+    >
       <div className="flex items-center gap-2 mb-3">
         <FileText className="h-4 w-4 text-muted-foreground" />
         <h3 className="font-display font-semibold text-foreground">Vault Details</h3>
@@ -173,95 +68,77 @@ function VaultDetailsSection() {
           <TableRow className="border-border">
             <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0 w-40">Curator</TableCell>
             <TableCell className="text-sm py-2.5 px-0">
-              <a href="https://keyrock.com/" target="_blank" rel="noopener noreferrer"
-                className="text-primary hover:underline inline-flex items-center gap-1">
-                {VAULT_DATA.curator} <ExternalLink className="h-3 w-3" />
+              <a
+                href={view.curatorUrl || "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1"
+              >
+                {view.curator} <ExternalLink className="h-3 w-3" />
               </a>
             </TableCell>
           </TableRow>
           <TableRow className="border-border">
             <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0 w-40">Yield Type</TableCell>
-            <TableCell className="text-foreground text-sm py-2.5 px-0">{VAULT_DATA.yieldType}</TableCell>
+            <TableCell className="text-foreground text-sm py-2.5 px-0">{view.yieldTypeLabel}</TableCell>
           </TableRow>
           <TableRow className="border-border">
             <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Redemption</TableCell>
-            <TableCell className="text-foreground text-sm py-2.5 px-0">{VAULT_DATA.redemptionTimeline}</TableCell>
-          </TableRow>
-          <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger className="flex items-center gap-1 cursor-help border-b border-dashed border-muted-foreground/40">
-                    Management Fee <Info className="h-3 w-3" />
-                  </TooltipTrigger>
-                  <TooltipContent className="text-xs max-w-xs">
-                    Fee charged by TermMax to maintain the platform
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </TableCell>
-            <TableCell className="text-foreground text-sm font-mono py-2.5 px-0">{VAULT_DATA.managementFee}%</TableCell>
-          </TableRow>
-          <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger className="flex items-center gap-1 cursor-help border-b border-dashed border-muted-foreground/40">
-                    Performance Fee <Info className="h-3 w-3" />
-                  </TooltipTrigger>
-                  <TooltipContent className="text-xs max-w-xs">
-                    Fee charged by curator to execute the strategy
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </TableCell>
-            <TableCell className="text-foreground text-sm font-mono py-2.5 px-0">{VAULT_DATA.performanceFee}%</TableCell>
-          </TableRow>
-          <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Custody</TableCell>
-            <TableCell className="text-foreground text-sm py-2.5 px-0 flex items-center gap-1.5">
-              <Lock className="h-3 w-3 text-buffer-safe" />
-              {VAULT_DATA.custody}
+            <TableCell className="text-foreground text-sm py-2.5 px-0">
+              {view.redemptionTerms || "—"}
             </TableCell>
           </TableRow>
+          {view.managementFeePercent != null && (
+            <TableRow className="border-border">
+              <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Management Fee</TableCell>
+              <TableCell className="text-foreground text-sm font-mono py-2.5 px-0">{view.managementFeePercent}%</TableCell>
+            </TableRow>
+          )}
+          {perfPct != null && (
+            <TableRow className="border-border">
+              <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Performance Fee</TableCell>
+              <TableCell className="text-foreground text-sm font-mono py-2.5 px-0">{perfPct}%</TableCell>
+            </TableRow>
+          )}
+          {view.custody ? (
+            <TableRow className="border-border">
+              <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Custody</TableCell>
+              <TableCell className="text-foreground text-sm py-2.5 px-0 flex items-center gap-1.5">
+                <Lock className="h-3 w-3 text-buffer-safe" />
+                {view.custody}
+              </TableCell>
+            </TableRow>
+          ) : null}
+          {view.auditor ? (
+            <TableRow className="border-border">
+              <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Auditor</TableCell>
+              <TableCell className="text-sm py-2.5 px-0 text-foreground">{view.auditor}</TableCell>
+            </TableRow>
+          ) : null}
+          {view.riskFactors.length > 0 && (
+            <TableRow className="border-border">
+              <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0 align-top">Risk factors</TableCell>
+              <TableCell className="text-xs py-2.5 px-0 text-muted-foreground space-y-2">
+                {view.riskFactors.map((rf) => (
+                  <div key={rf.id}>
+                    <div className="font-medium text-foreground">{rf.title}</div>
+                    <div>{rf.description}</div>
+                  </div>
+                ))}
+              </TableCell>
+            </TableRow>
+          )}
           <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Auditor</TableCell>
-            <TableCell className="text-sm py-2.5 px-0">
-              <a href={VAULT_DATA.auditUrl} target="_blank" rel="noopener noreferrer"
-                className="text-primary hover:underline inline-flex items-center gap-1">
-                {VAULT_DATA.auditor} <ExternalLink className="h-3 w-3" />
-              </a>
-            </TableCell>
-          </TableRow>
-          <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Bug Bounty</TableCell>
-            <TableCell className="text-sm py-2.5 px-0">
-              <a href={VAULT_DATA.bugBountyUrl} target="_blank" rel="noopener noreferrer"
-                className="text-primary hover:underline inline-flex items-center gap-1">
-                <Bug className="h-3 w-3" /> {VAULT_DATA.bugBounty} <ExternalLink className="h-3 w-3" />
-              </a>
-            </TableCell>
-          </TableRow>
-          <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">DeFi Safety</TableCell>
-            <TableCell className="text-sm py-2.5 px-0">
-              <a href={VAULT_DATA.defiSafetyUrl} target="_blank" rel="noopener noreferrer"
-                className="text-primary hover:underline inline-flex items-center gap-1">
-                <ShieldCheck className="h-3 w-3" /> Score: {VAULT_DATA.defiSafetyScore}% <ExternalLink className="h-3 w-3" />
-              </a>
-            </TableCell>
-          </TableRow>
-          <TableRow className="border-border">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Inception</TableCell>
-            <TableCell className="text-foreground text-sm font-mono py-2.5 px-0">{VAULT_DATA.inceptionDate}</TableCell>
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Track record</TableCell>
+            <TableCell className="text-foreground text-sm font-mono py-2.5 px-0">{view.trackRecordDays}d</TableCell>
           </TableRow>
           <TableRow className="border-0">
-            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">Contract</TableCell>
+            <TableCell className="text-muted-foreground text-xs font-mono py-2.5 px-0">mToken</TableCell>
             <TableCell className="text-sm py-2.5 px-0">
-              <span className="font-mono text-primary cursor-pointer hover:underline inline-flex items-center gap-1">
-                {truncateAddress(VAULT_DATA.contractAddress)}
+              <a href={explorer} target="_blank" rel="noopener noreferrer" className="font-mono text-primary hover:underline inline-flex items-center gap-1">
+                {truncateAddress(view.mTokenAddress)}
                 <ExternalLink className="h-3 w-3" />
-              </span>
+              </a>
             </TableCell>
           </TableRow>
         </TableBody>
@@ -270,42 +147,20 @@ function VaultDetailsSection() {
   );
 }
 
-// --- Rate Type Badge ---
-function RateTypeBadge({ type }: { type: RateType }) {
-  if (!type) return null;
-  if (type === "floating") {
-    return (
-      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold font-mono uppercase tracking-wider bg-amber-500/30 text-amber-300 border border-amber-500/50">
-        ~floating
-      </span>
-    );
-  }
-  return (
-    <span className={cn(
-      "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold font-mono uppercase tracking-wider",
-      type === "fixed"
-        ? "bg-primary/15 text-primary border border-primary/20"
-        : "bg-amber-500/30 text-amber-300 border border-amber-500/50"
-    )}>
-      {type}
-    </span>
-  );
-}
+const MAX_VISIBLE = 4;
 
-// --- Collapsible category list (show 2 by default) ---
-const MAX_VISIBLE = 2;
-
-function CollapsibleItems({ items, renderItem }: { items: any[]; renderItem: (item: any, i: number) => React.ReactNode }) {
+function CollapsibleRows({ rows, renderRow }: { rows: PortfolioRow[]; renderRow: (row: PortfolioRow, i: number) => ReactNode }) {
   const [expanded, setExpanded] = useState(false);
-  const needsCollapse = items.length > MAX_VISIBLE;
-  const visible = needsCollapse && !expanded ? items.slice(0, MAX_VISIBLE) : items;
-  const hiddenCount = items.length - MAX_VISIBLE;
+  const needsCollapse = rows.length > MAX_VISIBLE;
+  const visible = needsCollapse && !expanded ? rows.slice(0, MAX_VISIBLE) : rows;
+  const hiddenCount = rows.length - MAX_VISIBLE;
 
   return (
     <div>
-      {visible.map((item, i) => renderItem(item, i))}
+      {visible.map((row, i) => renderRow(row, i))}
       {needsCollapse && (
         <button
+          type="button"
           onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors mt-1 pl-0"
         >
@@ -317,55 +172,64 @@ function CollapsibleItems({ items, renderItem }: { items: any[]; renderItem: (it
   );
 }
 
-// --- Portfolio — Combined Assets, Loans & NAV ---
-function PortfolioSection() {
-  const totalAssets = ALLOCATION_DATA.filter(d => d.category !== "Loan").reduce((s, i) => s + i.amount, 0);
-  const totalLoans = LOAN_DATA.reduce((s, i) => s + i.amount, 0);
-  const nav = totalAssets - totalLoans;
-  const loanColor = CATEGORY_COLORS.Loan;
-
-  const renderAssetItem = (item: AllocationItem, i: number) => (
-    <div key={i} className="flex items-center justify-between py-1.5">
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-foreground">{item.name}</span>
-        <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
-        <RateTypeBadge type={item.rateType} />
-        {item.externalUrl && (
-          <a href={item.externalUrl} target="_blank" rel="noopener noreferrer"
-            className="text-muted-foreground hover:text-primary transition-colors">
-            <ExternalLink className="h-3 w-3" />
-          </a>
-        )}
-      </div>
-      <div className="flex items-center">
-        <span className="font-mono text-xs text-foreground w-12 text-right">{item.value}%</span>
-        <span className="font-mono text-xs text-muted-foreground w-20 text-right">{formatUSD(item.amount)}</span>
-      </div>
-    </div>
-  );
-
-  const renderLoanItem = (item: AllocationItem, i: number) => (
-    <div key={i} className="flex items-center justify-between py-1.5">
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-foreground">{item.name}</span>
-        <span className="text-[10px] text-muted-foreground/70 font-mono">{item.protocol}</span>
-        <RateTypeBadge type={item.rateType} />
-      </div>
-      <div className="flex items-center">
-        <span className="w-12"></span>
-        <span className="font-mono text-xs text-foreground w-20 text-right">{formatUSD(item.amount)}</span>
-      </div>
-    </div>
-  );
-
+function PortfolioSection({
+  view,
+  pieData,
+  assetRows,
+  loanRows,
+  totalAssets,
+  totalLoans,
+  netAssetValue,
+}: {
+  view: VaultDetailView;
+  pieData: PortfolioPieSlice[];
+  assetRows: PortfolioRow[];
+  loanRows: PortfolioRow[];
+  totalAssets: number;
+  totalLoans: number;
+  netAssetValue: number;
+}) {
+  const loanColor = "hsl(0, 65%, 55%)";
   const [strategyExpanded, setStrategyExpanded] = useState(false);
 
+  const byCategory = useMemo(() => {
+    const m = new Map<string, PortfolioRow[]>();
+    for (const r of assetRows) {
+      const k = r.category || "Other";
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(r);
+    }
+    return m;
+  }, [assetRows]);
+
+  const renderRow = (row: PortfolioRow, i: number, showPct: boolean) => (
+    <div key={`${row.name}-${i}`} className="flex items-center justify-between py-1.5">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-sm text-foreground truncate">{row.name}</span>
+        <span className="text-[10px] text-muted-foreground/70 font-mono shrink-0">{row.protocol}</span>
+      </div>
+      <div className="flex items-center shrink-0">
+        {showPct ? (
+          <span className="font-mono text-xs text-foreground w-12 text-right">
+            {formatDisplayNumber(row.valuePct, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+          </span>
+        ) : (
+          <span className="w-12" />
+        )}
+        <span className="font-mono text-xs text-muted-foreground w-24 text-right">{formatUSD(row.amountUsd)}</span>
+      </div>
+    </div>
+  );
+
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-      className="rounded-xl border border-border bg-card p-5">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3 }}
+      className="rounded-xl border border-border bg-card p-5"
+    >
       <h3 className="font-display font-semibold text-foreground mb-5">Portfolio — Asset Allocation</h3>
 
-      {/* NAV Summary Bar */}
       <div className="rounded-lg bg-secondary/50 border border-border p-4 mb-4">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
@@ -374,141 +238,174 @@ function PortfolioSection() {
           </div>
           <div className="flex flex-col items-center justify-center">
             <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Outstanding Loans</div>
-            <div className="text-lg font-mono font-bold" style={{ color: loanColor }}>− {formatUSD(totalLoans)}</div>
+            <div className="text-lg font-mono font-bold" style={{ color: loanColor }}>
+              − {formatUSD(totalLoans)}
+            </div>
           </div>
           <div>
             <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground mb-1">Net Asset Value</div>
-            <div className="text-lg font-mono font-bold text-primary">{formatUSD(nav)}</div>
+            <div className="text-lg font-mono font-bold text-primary">{formatUSD(netAssetValue)}</div>
           </div>
         </div>
       </div>
 
-      {/* Strategy — collapsible */}
       <div className="mb-6 px-1">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Strategy</span>
-          <button onClick={() => setStrategyExpanded(!strategyExpanded)}
-            className="text-[11px] text-primary flex items-center gap-1 hover:underline">
+          <button
+            type="button"
+            onClick={() => setStrategyExpanded(!strategyExpanded)}
+            className="text-[11px] text-primary flex items-center gap-1 hover:underline"
+          >
             {strategyExpanded ? "Less" : "Details"}
             {strategyExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
         </div>
-        <p className="text-sm text-muted-foreground leading-relaxed">{VAULT_DATA.strategy}</p>
+        <p className="text-sm text-muted-foreground leading-relaxed">{view.strategy}</p>
         <AnimatePresence>
-          {strategyExpanded && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden">
-              <p className="text-sm text-muted-foreground leading-relaxed mt-2">{VAULT_DATA.strategyDetail}</p>
+          {strategyExpanded && (view.strategyDetail || view.strategy) && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <p className="text-sm text-muted-foreground leading-relaxed mt-2">{view.strategyDetail || view.strategy}</p>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-start gap-8">
-        {/* Pie chart — assets only */}
-        <div className="w-44 flex-shrink-0 self-center">
-          <div className="h-44">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={PIE_DATA} innerRadius={44} outerRadius={68} dataKey="value" strokeWidth={2} stroke="hsl(220, 18%, 10%)">
-                  {PIE_DATA.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
+      {pieData.length === 0 && assetRows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No allocation breakdown available for this vault.</p>
+      ) : (
+        <div className="flex flex-col sm:flex-row items-start gap-8">
+          <div className="w-44 flex-shrink-0 self-center">
+            <div className="h-44">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    innerRadius={44}
+                    outerRadius={68}
+                    dataKey="value"
+                    nameKey="name"
+                    strokeWidth={2}
+                    stroke="hsl(220, 18%, 10%)"
+                  >
+                    {pieData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2">
+              {pieData.map((entry, i) => (
+                <span key={i} className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.color }} />
+                  {entry.name}{" "}
+                  {formatDisplayNumber(entry.value, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap justify-center gap-x-3 gap-y-1 mt-2">
-            {PIE_DATA.map((entry, i) => (
-              <span key={i} className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-mono">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: entry.color }} />
-                {entry.name} {entry.value.toFixed(1)}%
-              </span>
-            ))}
-          </div>
-        </div>
 
-        {/* Asset + Loan breakdown */}
-        <div className="flex-1 w-full space-y-5">
-          {/* Asset categories */}
-          {ASSET_CATEGORIES.map((cat) => {
-            const items = ALLOCATION_DATA.filter((d) => d.category === cat);
-            if (items.length === 0) return null;
-            const meta = CATEGORY_META[cat];
-            const catTotal = items.reduce((s, i) => s + i.value, 0);
-            const catAmount = items.reduce((s, i) => s + i.amount, 0);
-            const catColor = CATEGORY_COLORS[cat];
+          <div className="flex-1 w-full space-y-5">
+            {[...byCategory.entries()].map(([cat, rows]) => {
+              const catAmount = rows.reduce((s, r) => s + r.amountUsd, 0);
+              const catPct = totalAssets > 0 ? (catAmount / totalAssets) * 100 : 0;
+              const color = pieData.find((p) => p.name === cat)?.color ?? "hsl(187, 100%, 50%)";
+              return (
+                <div key={cat}>
+                  <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-border">
+                    <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color }}>
+                      <span className="w-3 h-3 rounded" style={{ background: color }} />
+                      {cat}
+                    </span>
+                    <div className="flex items-center">
+                      <span className="font-mono text-xs font-semibold text-foreground w-12 text-right">
+                        {formatDisplayNumber(catPct, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
+                      </span>
+                      <span className="font-mono text-xs text-muted-foreground w-24 text-right">{formatUSD(catAmount)}</span>
+                    </div>
+                  </div>
+                  <div className="pl-5">
+                    <CollapsibleRows rows={rows} renderRow={(row, i) => renderRow(row, i, true)} />
+                  </div>
+                </div>
+              );
+            })}
 
-            return (
-              <div key={cat}>
+            {loanRows.length > 0 && (
+              <div>
                 <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-border">
-                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: catColor }}>
-                    <span className="w-3 h-3 rounded" style={{ background: catColor }} />
-                    {meta.label}
+                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: loanColor }}>
+                    <span className="w-3 h-3 rounded" style={{ background: loanColor }} />
+                    Loans (Liabilities)
                   </span>
                   <div className="flex items-center">
-                    <span className="font-mono text-xs font-semibold text-foreground w-12 text-right">{catTotal.toFixed(1)}%</span>
-                    <span className="font-mono text-xs text-muted-foreground w-20 text-right">{formatUSD(catAmount)}</span>
+                    <span className="w-12" />
+                    <span className="font-mono text-xs font-semibold w-24 text-right" style={{ color: loanColor }}>
+                      {formatUSD(totalLoans)}
+                    </span>
                   </div>
                 </div>
                 <div className="pl-5">
-                  <CollapsibleItems items={items} renderItem={renderAssetItem} />
+                  <CollapsibleRows rows={loanRows} renderRow={(row, i) => renderRow(row, i, false)} />
                 </div>
               </div>
-            );
-          })}
-
-          {/* Loan section within same panel */}
-          <div>
-            <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-border">
-              <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: loanColor }}>
-                <span className="w-3 h-3 rounded" style={{ background: loanColor }} />
-                Loans (Liabilities)
-              </span>
-              <div className="flex items-center">
-                <span className="w-12"></span>
-                <span className="font-mono text-xs font-semibold w-20 text-right" style={{ color: loanColor }}>
-                  {formatUSD(totalLoans)}
-                </span>
-              </div>
-            </div>
-            <div className="pl-5">
-              <CollapsibleItems items={LOAN_DATA} renderItem={renderLoanItem} />
-            </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
     </motion.div>
   );
 }
 
-// --- NAV Chart with integrated APY ---
-function NAVChart() {
+function NAVChart({
+  view,
+  navByPeriod,
+}: {
+  view: VaultDetailView;
+  navByPeriod: import("@/hooks/queries/useVaultDetailBundle").VaultDetailBundle["navByPeriod"];
+}) {
   const [period, setPeriod] = useState<"7d" | "30d" | "90d">("30d");
-  const chartData = NAV_DATA_MAP[period];
-  const currentAPY = APY_MAP[period];
-  const latestNAV = chartData[chartData.length - 1]?.nav;
+  const chartData = navByPeriod[period].chart;
+  const apyMap = { "7d": view.apy7d, "30d": view.apy30d, "90d": view.apy90d };
+  const currentAPY = apyMap[period];
+  const latestNAV = chartData.length ? chartData[chartData.length - 1].nav : view.nav;
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-      className="rounded-xl border border-border bg-card p-5">
-      {/* Header row: Title + APY + Period Toggle */}
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+      className="rounded-xl border border-border bg-card p-5"
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
         <div>
           <h3 className="font-display font-semibold text-foreground">NAV Performance</h3>
         </div>
         <div className="flex items-center gap-3">
-          {/* APY Badge */}
           <div className="flex items-center gap-1.5 bg-primary/10 rounded-lg px-3 py-1.5">
             <TrendingUp className="h-3.5 w-3.5 text-primary" />
             <span className="text-xs text-muted-foreground font-mono">APY</span>
-            <span className="text-sm font-mono font-bold text-primary">{currentAPY}%</span>
+            <span className="text-sm font-mono font-bold text-primary">
+              {formatDisplayNumber(currentAPY, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+            </span>
           </div>
-          {/* Period toggle */}
           <div className="flex bg-secondary rounded-lg p-0.5">
             {(["7d", "30d", "90d"] as const).map((p) => (
-              <button key={p} onClick={() => setPeriod(p)}
-                className={`text-xs font-mono px-2.5 py-1 rounded-md transition-all ${p === period ? "bg-primary/20 text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPeriod(p)}
+                className={cn(
+                  "text-xs font-mono px-2.5 py-1 rounded-md transition-all",
+                  p === period ? "bg-primary/20 text-primary font-semibold" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
                 {p}
               </button>
             ))}
@@ -516,50 +413,94 @@ function NAVChart() {
         </div>
       </div>
 
-      {/* Current NAV callout */}
       <div className="flex items-baseline gap-2 mb-4">
-        <span className="text-2xl font-mono font-bold text-foreground">${latestNAV?.toFixed(4)}</span>
-        <span className="text-xs font-mono text-yield-positive">+{VAULT_DATA.navDelta24h}% (24h)</span>
+        <span className="text-2xl font-mono font-bold text-foreground">
+          ${formatDisplayNumber(latestNAV, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}
+        </span>
+        <span
+          className={cn(
+            "text-xs font-mono",
+            view.navDelta24h >= 0 ? "text-yield-positive" : "text-destructive",
+          )}
+        >
+          {view.navDelta24h >= 0 ? "+" : ""}
+          {formatDisplayNumber(view.navDelta24h, { minimumFractionDigits: 0, maximumFractionDigits: 3 })}% (24h)
+        </span>
       </div>
 
-      <div className="h-52">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData}>
-            <defs>
-              <linearGradient id="navGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="hsl(187, 100%, 50%)" stopOpacity={0.3} />
-                <stop offset="100%" stopColor="hsl(187, 100%, 50%)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 16%)" />
-            <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }} axisLine={false} tickLine={false} interval={period === "90d" ? 14 : period === "30d" ? 6 : 1} />
-            <YAxis domain={["dataMin - 0.005", "dataMax + 0.005"]} tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => v.toFixed(3)} />
-            <RechartsTooltip
-              contentStyle={{ background: "hsl(220, 18%, 10%)", border: "1px solid hsl(220, 15%, 16%)", borderRadius: 8, fontSize: 12 }}
-              labelStyle={{ color: "hsl(215, 15%, 55%)" }}
-              formatter={(value: number) => [`$${value.toFixed(4)}`, "NAV"]}
-            />
-            <Area type="monotone" dataKey="nav" stroke="hsl(187, 100%, 50%)" strokeWidth={2} fill="url(#navGradient)" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      {chartData.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-8">No NAV history for this range.</p>
+      ) : (
+        <div className="h-52">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="navGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(187, 100%, 50%)" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="hsl(187, 100%, 50%)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 15%, 16%)" />
+              <XAxis
+                dataKey="day"
+                tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }}
+                axisLine={false}
+                tickLine={false}
+                interval={period === "90d" ? 14 : period === "30d" ? 6 : 1}
+              />
+              <YAxis
+                domain={["dataMin - 0.005", "dataMax + 0.005"]}
+                tick={{ fontSize: 10, fill: "hsl(215, 15%, 55%)" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v: number) =>
+                  formatDisplayNumber(v, { minimumFractionDigits: 0, maximumFractionDigits: 3 })
+                }
+              />
+              <RechartsTooltip
+                contentStyle={{
+                  background: "hsl(220, 18%, 10%)",
+                  border: "1px solid hsl(220, 15%, 16%)",
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+                labelStyle={{ color: "hsl(215, 15%, 55%)" }}
+                formatter={(value: number) => [
+                  `$${formatDisplayNumber(value, { minimumFractionDigits: 0, maximumFractionDigits: 4 })}`,
+                  "NAV",
+                ]}
+              />
+              <Area type="monotone" dataKey="nav" stroke="hsl(187, 100%, 50%)" strokeWidth={2} fill="url(#navGradient)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </motion.div>
   );
 }
 
-// --- Deposit Panel ---
-function DepositPanel() {
+function DepositPanel({ view }: { view: VaultDetailView }) {
   const [amount, setAmount] = useState("");
   const parsedAmount = parseFloat(amount) || 0;
-  const remainingCapacity = VAULT_DATA.capacity - VAULT_DATA.tvl;
+  const remainingCapacity = Math.max(0, view.capacity - view.tvl);
   const exceedsCapacity = parsedAmount > remainingCapacity;
 
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-xs text-muted-foreground font-mono mb-1.5 block">Deposit Amount (USDC)</label>
-        <Input type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)}
-          className={cn("font-mono text-lg bg-secondary border-border", exceedsCapacity && "border-destructive focus-visible:ring-destructive")} />
+        <label className="text-xs text-muted-foreground font-mono mb-1.5 block">
+          Deposit Amount ({view.underlyingSymbol})
+        </label>
+        <Input
+          type="number"
+          placeholder="0.00"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className={cn(
+            "font-mono text-lg bg-secondary border-border",
+            exceedsCapacity && "border-destructive focus-visible:ring-destructive",
+          )}
+        />
       </div>
       {parsedAmount > 0 && !exceedsCapacity && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2 p-3 rounded-lg bg-secondary/50 border border-border">
@@ -570,29 +511,30 @@ function DepositPanel() {
         </motion.div>
       )}
       {exceedsCapacity && (
-        <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 space-y-1.5">
-          <p className="text-xs text-destructive font-semibold">
-            Exceeds vault capacity
-          </p>
+        <motion.div
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 space-y-1.5"
+        >
+          <p className="text-xs text-destructive font-semibold">Exceeds vault capacity</p>
           <p className="text-[11px] text-muted-foreground">
-            Remaining capacity is <span className="font-mono font-semibold text-foreground">{formatUSD(remainingCapacity)}</span>. Please enter an amount within the limit.
+            Remaining capacity is <span className="font-mono font-semibold text-foreground">{formatUSD(remainingCapacity)}</span>.
           </p>
         </motion.div>
       )}
       <Button className="w-full" disabled={parsedAmount <= 0 || exceedsCapacity}>
-        <ArrowDownToLine className="h-4 w-4" /> Deposit USDC
+        <ArrowDownToLine className="h-4 w-4" /> Deposit {view.underlyingSymbol}
       </Button>
     </div>
   );
 }
 
-// --- Withdraw Panel ---
-function WithdrawPanel() {
+function WithdrawPanel({ view }: { view: VaultDetailView }) {
   const [amount, setAmount] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
   const parsedAmount = parseFloat(amount) || 0;
-  const userBalance = 5230.42;
-  const instantLiquidity = VAULT_DATA.liquidityAmount;
+  const userBalance = 0;
+  const instantLiquidity = view.liquidityAmount;
   const exceedsBuffer = parsedAmount > instantLiquidity;
 
   return (
@@ -600,33 +542,37 @@ function WithdrawPanel() {
       {step === 1 && (
         <>
           <div>
-            <label className="text-xs text-muted-foreground font-mono mb-1.5 block">Withdraw Amount (USDC)</label>
-            <Input type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)}
-              className="font-mono text-lg bg-secondary border-border" />
+            <label className="text-xs text-muted-foreground font-mono mb-1.5 block">
+              Withdraw Amount ({view.underlyingSymbol})
+            </label>
+            <Input
+              type="number"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="font-mono text-lg bg-secondary border-border"
+            />
             <div className="flex justify-end mt-1">
-              <span className="text-[10px] text-muted-foreground font-mono">Balance: {userBalance.toLocaleString()} USDC</span>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                Balance: {formatDisplayNumber(userBalance, { maximumFractionDigits: 6 })} {view.underlyingSymbol}
+              </span>
             </div>
           </div>
-           {exceedsBuffer && parsedAmount > 0 && (
-            <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} className="p-3 rounded-lg bg-buffer-warning/10 border border-buffer-warning/30 space-y-2">
+          {exceedsBuffer && parsedAmount > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-3 rounded-lg bg-buffer-warning/10 border border-buffer-warning/30 space-y-2"
+            >
               <p className="text-xs text-buffer-warning">
-                ⚠ Exceeds instant liquidity ({formatUSD(instantLiquidity)}). Up to that amount can be withdrawn instantly.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                The remaining {formatUSD(parsedAmount - instantLiquidity)} will be queued and processed when the Curator replenishes liquidity.
+                ⚠ Exceeds instant liquidity ({formatUSD(instantLiquidity)}).
               </p>
             </motion.div>
           )}
-          <Button className="w-full" variant={exceedsBuffer ? "accent" : "default"} disabled={parsedAmount <= 0}
-            onClick={() => exceedsBuffer ? setStep(2) : undefined}>
+          <Button className="w-full" variant={exceedsBuffer ? "accent" : "default"} disabled={parsedAmount <= 0} onClick={() => (exceedsBuffer ? setStep(2) : undefined)}>
             <ArrowUpFromLine className="h-4 w-4" />
-            {exceedsBuffer ? "Review Withdrawal" : "Withdraw USDC"}
+            {exceedsBuffer ? "Review Withdrawal" : `Withdraw ${view.underlyingSymbol}`}
           </Button>
-          {exceedsBuffer && (
-            <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground">
-              Or redeem as FT tokens (advanced)
-            </Button>
-          )}
         </>
       )}
       {step === 2 && (
@@ -646,12 +592,13 @@ function WithdrawPanel() {
               <span className="text-foreground font-mono">{formatUSD(parsedAmount)}</span>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Queued withdrawals are processed in order. Estimated wait: 1–3 days depending on Curator operations.
-          </p>
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>Back</Button>
-            <Button variant="accent" className="flex-1">Confirm</Button>
+            <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>
+              Back
+            </Button>
+            <Button variant="accent" className="flex-1">
+              Submit
+            </Button>
           </div>
         </motion.div>
       )}
@@ -659,169 +606,252 @@ function WithdrawPanel() {
   );
 }
 
-// --- Main Page ---
 export default function VaultDetailPage() {
-  const { vaultId } = useParams();
+  const { chainId: chainIdParam, address: addressParam } = useParams();
   const navigate = useNavigate();
+  const chainId = chainIdParam ? parseInt(chainIdParam, 10) : undefined;
+  const mTokenAddress = addressParam;
 
+  const { data, isLoading, isError, error } = useVaultDetailBundle(chainId, mTokenAddress);
+  const { address } = useAccount();
+  const { data: listData } = useVaultListData();
+
+  const myPosition = useMemo(() => {
+    if (!address || !listData?.userPositions?.length || !chainId || !mTokenAddress) return null;
+    const a = mTokenAddress.toLowerCase();
+    return listData.userPositions.find(
+      (p) => p.chainId === chainId && p.mTokenAddress.toLowerCase() === a,
+    );
+  }, [address, listData, chainId, mTokenAddress]);
+
+  if (chainId == null || Number.isNaN(chainId) || !mTokenAddress) {
+    return (
+      <div className="p-6 max-w-6xl mx-auto text-muted-foreground">
+        Invalid vault link. <button type="button" className="text-primary underline" onClick={() => navigate("/")}>Back</button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return <div className="p-6 max-w-6xl mx-auto text-muted-foreground">Loading vault…</div>;
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="p-6 max-w-6xl mx-auto text-destructive">
+        Failed to load vault{error instanceof Error ? `: ${error.message}` : ""}.
+        <button type="button" className="block mt-2 text-primary underline" onClick={() => navigate("/")}>
+          Back to Vaults
+        </button>
+      </div>
+    );
+  }
+
+  const { detailView: view, portfolio, navByPeriod, activity } = data;
+  const explorer = getExplorerAddressUrl(view.chainId, view.mTokenAddress);
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <button onClick={() => navigate("/")} className="text-sm text-muted-foreground hover:text-primary transition-colors mb-6 flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => navigate("/")}
+        className="text-sm text-muted-foreground hover:text-primary transition-colors mb-6 flex items-center gap-1"
+      >
         ← Back to Vaults
       </button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Left: Vault Info (2 cols) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Header with Share Price */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-display font-bold text-foreground">{VAULT_DATA.name}</h1>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-display font-bold text-foreground">{view.name}</h1>
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button onClick={() => copyToClipboard(VAULT_DATA.contractAddress)}
-                      className="flex items-center gap-1 text-xs font-mono text-muted-foreground bg-secondary px-2 py-0.5 rounded hover:text-foreground transition-colors cursor-pointer">
-                      {truncateAddress(VAULT_DATA.contractAddress)}
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(view.mTokenAddress)}
+                      className="flex items-center gap-1 text-xs font-mono text-muted-foreground bg-secondary px-2 py-0.5 rounded hover:text-foreground transition-colors cursor-pointer"
+                    >
+                      {truncateAddress(view.mTokenAddress)}
                       <Copy className="h-3 w-3" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent className="text-xs">Click to copy address</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              <a href={`https://etherscan.io/address/${VAULT_DATA.contractAddress}`} target="_blank" rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-primary transition-colors">
+              <a href={explorer} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Shield className="h-4 w-4" />
-              <span className="font-mono">{VAULT_DATA.curator}</span>
+              <span className="font-mono">{view.curator}</span>
               <span className="text-border">•</span>
               <Clock className="h-4 w-4" />
-              <span className="font-mono">Active since {VAULT_DATA.inceptionDate}</span>
+              <span className="font-mono">{view.trackRecordDays}d track record</span>
             </div>
           </motion.div>
 
-          {/* TVL Stat */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+          >
             <div className="rounded-lg border border-border bg-card p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">TVL (NAV)</span>
               </div>
               <div className="flex flex-col gap-2">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-display font-bold text-foreground">{formatUSD(VAULT_DATA.tvl)}</span>
-                </div>
-                <div className="text-xs text-muted-foreground font-mono">
-                  {(VAULT_DATA.tvl / 1e6).toFixed(2)}M USDC
-                </div>
+                <span className="text-2xl font-display font-bold text-foreground">{formatUSD(view.tvl)}</span>
+                <div className="text-xs text-muted-foreground font-mono">{view.underlyingSymbol}</div>
               </div>
             </div>
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Vault Capacity</span>
                 <span className="text-xs font-mono text-muted-foreground">
-                  {((VAULT_DATA.tvl / VAULT_DATA.capacity) * 100).toFixed(0)}% filled
+                  {view.capacity > 0
+                    ? `${formatDisplayNumber((view.tvl / view.capacity) * 100, { maximumFractionDigits: 0 })}% filled`
+                    : "—"}
                 </span>
               </div>
               <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-display font-bold text-foreground">{formatUSD(VAULT_DATA.capacity)}</span>
+                <span className="text-2xl font-display font-bold text-foreground">{formatUSD(view.capacity)}</span>
                 <span className="text-xs text-muted-foreground font-mono">cap</span>
               </div>
-              <div className="space-y-1.5">
-                <div className="h-2 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-500"
-                    style={{ width: `${(VAULT_DATA.tvl / VAULT_DATA.capacity) * 100}%` }}
-                  />
+              {view.capacity > 0 && (
+                <div className="space-y-1.5">
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all duration-500"
+                      style={{ width: `${Math.min(100, (view.tvl / view.capacity) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-end text-[10px] font-mono">
+                    <span className="text-primary">Available: {formatUSD(Math.max(0, view.capacity - view.tvl))}</span>
+                  </div>
                 </div>
-                <div className="flex justify-end text-[10px] font-mono">
-                  <span className="text-primary">Available: {formatUSD(VAULT_DATA.capacity - VAULT_DATA.tvl)}</span>
-                </div>
-              </div>
+              )}
             </div>
           </motion.div>
 
-          {/* 1. NAV Chart (hero visual — includes APY toggle) */}
-          <NAVChart />
+          <NAVChart view={view} navByPeriod={navByPeriod} />
 
-          {/* 2. Portfolio — Asset Allocation */}
-          <PortfolioSection />
+          <PortfolioSection
+            view={view}
+            pieData={portfolio.pieData}
+            assetRows={portfolio.assetRows}
+            loanRows={portfolio.loanRows}
+            totalAssets={portfolio.totalAssets}
+            totalLoans={portfolio.totalLoans}
+            netAssetValue={portfolio.netAssetValue}
+          />
 
-          {/* 5. Vault Details */}
-          <VaultDetailsSection />
+          <VaultDetailsSection view={view} />
 
-          {/* 6. On-chain Activity Log */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="rounded-xl border border-border bg-card p-5">
-            <h3 className="font-display font-semibold text-foreground mb-4">On-chain Activity Log</h3>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+            className="rounded-xl border border-border bg-card p-5"
+          >
+            <h3 className="font-display font-semibold text-foreground mb-4">On-chain Activity</h3>
+            <p className="text-xs text-muted-foreground mb-3">Recent deposits and withdrawals (from indexer).</p>
             <div className="space-y-3">
-              {MOCK_ACTIONS.map((a, i) => (
-                <div key={i} className="flex items-center justify-between text-sm py-2 border-b border-border last:border-0">
-                  <div className="flex items-center gap-3">
-                    <Activity className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-foreground">{a.type}</span>
+              {activity.items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No activity yet.</p>
+              ) : (
+                activity.items.map((a, i) => (
+                  <div key={`${a.txHash}-${i}`} className="flex items-center justify-between text-sm py-2 border-b border-border last:border-0 gap-2 flex-wrap">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="text-foreground capitalize">
+                        {a.type} · {formatUSD(parseDecimal(a.usdValue))}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
+                      <span>{truncateAddress(a.user)}</span>
+                      <a
+                        href={getExplorerTxUrl(view.chainId, a.txHash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary/80 hover:text-primary inline-flex items-center gap-1 truncate max-w-[140px]"
+                      >
+                        {truncateAddress(a.txHash)}
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                      </a>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
-                    <span>{a.time}</span>
-                    <span className="text-primary/70">{a.tx}</span>
-                    <ExternalLink className="h-3 w-3 cursor-pointer hover:text-primary transition-colors" />
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </motion.div>
 
-          {/* Risk Disclaimer */}
           <div className="mt-2 mb-2 rounded-lg border border-border/40 bg-card/50 px-5 py-4">
             <div className="flex items-start gap-2.5">
               <Info className="h-3.5 w-3.5 text-muted-foreground/40 mt-0.5 flex-shrink-0" />
               <div>
                 <h4 className="text-[11px] font-mono font-semibold text-muted-foreground/50 uppercase tracking-wider mb-1.5">Risk Disclaimer</h4>
                 <p className="text-[11px] text-muted-foreground/40 leading-relaxed">
-                  Investing in TermMax Active Vaults involves risk, including potential loss of principal due to smart contract vulnerabilities, market volatility, and liquidity constraints. Please review all relevant documentation before proceeding.
+                  Investing in TermMax Active Vaults involves risk, including potential loss of principal due to smart contract vulnerabilities, market
+                  volatility, and liquidity constraints. Please review all relevant documentation before proceeding.
                 </p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Right: Deposit/Withdraw Panel */}
         <div className="flex flex-col items-start">
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }} className="sticky top-6 space-y-6 w-full">
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            {/* My Position — integrated header */}
-            <div className="px-5 pt-4 pb-3 border-b border-border bg-secondary/30">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">My Position</span>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-xl font-display font-bold text-foreground">10,000.00</span>
-                  <span className="text-xs font-mono text-muted-foreground">USDC</span>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.15 }}
+            className="sticky top-6 space-y-6 w-full"
+          >
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <div className="px-5 pt-4 pb-3 border-b border-border bg-secondary/30">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground font-mono uppercase tracking-wider">My Position</span>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-xl font-display font-bold text-foreground">
+                      {myPosition
+                        ? formatDisplayNumber(myPosition.shares, { maximumFractionDigits: 4 })
+                        : "—"}
+                    </span>
+                    <span className="text-xs font-mono text-muted-foreground">{view.underlyingSymbol}</span>
+                  </div>
+                </div>
+                <div className="flex justify-end mt-0.5">
+                  <span className="text-[10px] font-mono text-muted-foreground">
+                    {myPosition
+                      ? `≈ $${formatDisplayNumber(myPosition.redeemableUSD, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : "Connect wallet to view"}
+                  </span>
                 </div>
               </div>
-              <div className="flex justify-end mt-0.5">
-                <span className="text-[10px] font-mono text-muted-foreground">≈ $10,000.00</span>
+
+              <div className="p-5">
+                <Tabs defaultValue="deposit">
+                  <TabsList className="w-full bg-secondary mb-4">
+                    <TabsTrigger value="deposit" className="flex-1 font-mono text-xs">
+                      <ArrowDownToLine className="h-3.5 w-3.5 mr-1.5" /> Deposit
+                    </TabsTrigger>
+                    <TabsTrigger value="withdraw" className="flex-1 font-mono text-xs">
+                      <ArrowUpFromLine className="h-3.5 w-3.5 mr-1.5" /> Withdraw
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="deposit">
+                    <DepositPanel view={view} />
+                  </TabsContent>
+                  <TabsContent value="withdraw">
+                    <WithdrawPanel view={view} />
+                  </TabsContent>
+                </Tabs>
               </div>
             </div>
-
-            {/* Deposit / Withdraw tabs */}
-            <div className="p-5">
-              <Tabs defaultValue="deposit">
-                <TabsList className="w-full bg-secondary mb-4">
-                  <TabsTrigger value="deposit" className="flex-1 font-mono text-xs">
-                    <ArrowDownToLine className="h-3.5 w-3.5 mr-1.5" /> Deposit
-                  </TabsTrigger>
-                  <TabsTrigger value="withdraw" className="flex-1 font-mono text-xs">
-                    <ArrowUpFromLine className="h-3.5 w-3.5 mr-1.5" /> Withdraw
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="deposit"><DepositPanel /></TabsContent>
-                <TabsContent value="withdraw"><WithdrawPanel /></TabsContent>
-              </Tabs>
-            </div>
-          </div>
-        </motion.div>
+          </motion.div>
         </div>
       </div>
     </div>

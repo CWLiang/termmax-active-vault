@@ -36,6 +36,29 @@ npm i
 npm run dev
 ```
 
+## Wallet connection (wagmi)
+
+This app uses [wagmi](https://wagmi.sh/) + the **injected** connector (MetaMask, Rabby, etc.). Default chains are **Ethereum mainnet** and **Sepolia** (`src/lib/wagmi.ts`). For reliable RPC access, copy `.env.example` to `.env` and set `VITE_RPC_URL_MAINNET` / `VITE_RPC_URL_SEPOLIA` if needed.
+
+## Strategy Vault API
+
+Vault list, detail, NAV history, allocations, risk, activity, and user positions are loaded from the **TermMax Strategy Vault API**. Vault URLs are `/vault/{chainId}/{mTokenAddress}` (EIP-55 checksummed address).
+
+### Local dev and CORS
+
+`curl` can call the API directly, but browsers enforce **CORS**. In **`npm run dev`**, requests default to same-origin **`/termmax-api`**, which Vite proxies to Render (see `vite.config.ts`). You normally **do not** need `VITE_API_BASE_URL` locally.
+
+For **production** builds hosted on another domain, the API must return `Access-Control-Allow-Origin` for that origin, **or** you front the API behind your own same-origin proxy.
+
+Set `VITE_API_BASE_URL` only when you intentionally want the browser to call that URL directly (and CORS is configured).
+
+## Curator Console routes
+
+- `/curator-console` — list strategy vaults from the API; **Manage** opens tools for that vault.
+- `/curator-console/vault/:chainId/:mTokenAddress/overview|nav|redemption|deposit|audit-log` — per-vault curator tools (sidebar appears after you enter a vault).
+
+Legacy paths (`/curator-console/vault-overview`, etc.) redirect to the vault list.
+
 **Edit a file directly in GitHub**
 
 - Navigate to the desired file(s).
